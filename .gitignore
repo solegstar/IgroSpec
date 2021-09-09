@@ -27,10 +27,10 @@ timing
 *.done
 *.eqn
 #*.hex
-*.html
+#*.html
 *.jdi
 #*.jpg
-*.mif
+#*.mif
 *.pin
 *.ptf.*
 *.qar
@@ -41,18 +41,25 @@ timing
 #*.sof
 *.sopc_builder
 *.summary
-*.tcl
-*.txt # Explicitly add any text files used
+#*.tcl
+#*.txt # Explicitly add any text files used
 *~
 *example*
 *sopc_*
 PLLJ_PLLSPE_INFO.txt
+messages.mif
 
 # KiCAD
 #*-cache.lib
 *.*-bak
 #*-info-cache
-
+bom
+pcb/rev*/gerbers
+*-sch.pdf
+*-top.pdf
+*-bot.pdf
+*-bom.pdf
+*.csv
 # Gtkwave
 *.ghw
 *.cf
