@@ -175,18 +175,19 @@ architecture rtl of igrospec is
 																	  -- D5 - 48k RAM lock, 1 - locked, 0 - extended memory enabled
 																	  -- D6 - not used
 																	  -- D7 - not used
-	
---	signal port_dffd  : std_logic_vector(2 downto 0); -- D0 - RAM A17'
-																	  -- D1 - RAM A18'
-																	  -- D2 - RAM A19'
-																	  -- D3 - D7 not used
 
---	signal port_1ffd  : std_logic_vector(7 downto 0); -- D0 - ext mem mode: 0 - normal, 1 - special, 
+	-------------1FFD_PORT------------------
+	 signal port_1ffd  : std_logic_vector(4 downto 0); -- D0 - ext mem mode: 0 - normal, 1 - special, 
 																	  -- D1 - not used,
 																	  -- D2 - ROM A15,
 																	  -- D3 - motor,
 																	  -- D4 - printer
 																	  -- D5, D6, D7 - not used
+	signal p3_mem_mode	: std_logic := '0';
+	signal p3_rom_pg		: std_logic_vector (1 downto 0) := "00";
+	signal p3_ram_pg		: std_logic_vector (1 downto 0) := "00";
+	signal p3_fdd_mot_en	: std_logic := '0';
+	signal p3_prn_cs		: std_logic := '0';
 
 	signal ay_port		: std_logic := '0';
 		
@@ -232,7 +233,7 @@ architecture rtl of igrospec is
 begin
 	reset <= not(N_RESET);
 
-	n_is_rom <= '0' when N_MREQ = '0' and A(15 downto 14)  = "00" else '1';
+	n_is_rom <= '0' when N_MREQ = '0' and A(15 downto 14)  = "00" and p3_mem_mode = '0' else '1';
 	n_is_ram <= '0' when N_MREQ = '0' and n_is_rom = '1' else '1';
 
 	-- pentagon ROM banks map (A14, A15):
@@ -240,7 +241,7 @@ begin
 	-- 01 - bank 1, TR-DOS
 	-- 10 - bank 2, Basic-128
 	-- 11 - bank 3, Basic-48
-	rom_page <= (not(trdos)) & (port_7ffd(4));
+	rom_page <= p3_rom_pg;
 	ROM_A14 <= rom_page(0);
 	ROM_A15 <= rom_page(1);
 	ROM_A16 <= '0';
@@ -252,14 +253,49 @@ begin
 	
 	mux <= A(15 downto 14);
 
-process (mux, port_7ffd)
+process (mux, port_7ffd, p3_mem_mode, p3_ram_pg)
 	begin
 		case mux is
-
-			when "00" => ram_page <= "000";                 -- Seg0 ROM 0000-3FFF or Seg0 RAM 0000-3FFF	
-			when "01" => ram_page <= "101";
-			when "10" => ram_page <= "010"; 	
-			when "11" => ram_page <= port_7ffd(2 downto 0);
+			when "00" => if p3_mem_mode='1' then
+								case p3_ram_pg is
+									when "00" => ram_page <= "000";
+									when "01" => ram_page <= "100";
+									when "10" => ram_page <= "100";
+									when "11" => ram_page <= "100";
+								end case;
+							 else
+								ram_page <= "000";  					-- Seg0 ROM 0000-3FFF or Seg0 RAM 0000-3FFF	
+							 end if;
+			when "01" => if p3_mem_mode='1' then
+								case p3_ram_pg is
+									when "00" => ram_page <= "001";
+									when "01" => ram_page <= "101";
+									when "10" => ram_page <= "101";
+									when "11" => ram_page <= "111";
+								end case;
+							 else 
+								ram_page <= "101";
+							 end if;	                  			-- Seg1 RAM 4000-7FFF	
+			when "10" => if p3_mem_mode='1' then
+								case p3_ram_pg is
+									when "00" => ram_page <= "010";
+									when "01" => ram_page <= "110";
+									when "10" => ram_page <= "110";
+									when "11" => ram_page <= "110";
+								end case;
+							 else
+								ram_page <= "010"; 	
+							 end if;                     			-- Seg2 RAM 8000-BFFF
+			when "11" => if p3_mem_mode='1' then
+								case p3_ram_pg is
+									when "00" => ram_page <= "011";
+									when "01" => ram_page <= "111";
+									when "10" => ram_page <= "011";
+									when "11" => ram_page <= "011";
+								end case;
+							 else
+								ram_page <= port_7ffd(2 downto 0);
+							 end if;										-- Seg3 RAM C000-FFFF	
 			when others => null;
 		end case;
 	end process;
@@ -284,8 +320,6 @@ vid_page <= '1' & port_7ffd(3) & '1';
 	
 	N_MRD1 <= '0' when ((vbus_mode = '1' and vbus_rdy = '0') or (vbus_mode = '0' and N_RD = '0' and N_MREQ = '0')) and kb_512 = '0' else '1';  
 	N_MWR1 <= '0' when vbus_mode = '0' and n_is_ram = '0' and N_WR = '0' and chr_col_cnt(0) = '0' and kb_512 = '0' else '1';
---	N_MRD2 <= '0' when ((vbus_mode = '1' and vbus_rdy = '0') or (vbus_mode = '0' and N_RD = '0' and N_MREQ = '0')) and kb_512 = '1' else '1';  
---	N_MWR2 <= '0' when vbus_mode = '0' and n_is_ram = '0' and N_WR = '0' and chr_col_cnt(0) = '0' and kb_512 = '1' else '1';
 	N_MRD2 <= '1';  
 	N_MWR2 <= '1';
 
@@ -316,7 +350,6 @@ vid_page <= '1' & port_7ffd(3) & '1';
 	-- todo
 	process( clk_14, clk_7 )
 	begin
-	-- rising edge of CLK14
 		if clk_14'event and clk_14 = '1' then
 			if clk_7 = '1' then
 				CLK_CPU <= chr_col_cnt(0);
@@ -324,11 +357,7 @@ vid_page <= '1' & port_7ffd(3) & '1';
 			end if;
 		end if;
 	end process;
-
-	
-	-- #FD port correction
---	fd_sel <= '0' when D(7 downto 4) = "1101" and D(2 downto 0) = "011" else '1'; -- IN, OUT Z80 Command Latch
-	 
+ 
 	port_write <= '1' when N_IORQ = '0' and N_WR = '0' and N_M1 = '1' and vbus_mode = '0' else '0';
 	port_read <= '1' when N_IORQ = '0' and N_RD = '0' and N_M1 = '1' and BUS_N_IORQGE = '0' else '0';
 	
@@ -336,9 +365,6 @@ vid_page <= '1' & port_7ffd(3) & '1';
 	D(7 downto 0) <= 
 		buf_md(7 downto 0) when n_is_ram = '0' and N_RD = '0' else -- MD buf	
 		'1' & ear & '1' & KB(4 downto 0) when port_read = '1' and A(0) = '0' else -- #FE
---		port_7ffd when port_read = '1' and A = X"7FFD" else -- #7FFD
---		port_1ffd when port_read = '1' and A = X"1FFD" else -- #1FFD
---		port_dffd when port_read = '1' and A = X"DFFD" else -- #DFFD
 		zc_do_bus when port_read = '1' and A(7 downto 6) = "01" and A(4 downto 0) = "10111" else -- Z-controller
 --		attr_r when port_read = '1' and A(7 downto 0) = "11111111" else -- #FF
 		"ZZZZZZZZ";
@@ -540,23 +566,14 @@ vid_page <= '1' & port_7ffd(3) & '1';
 	
 N_INT <= int;
 
-	-- fd port correction
---	process(fd_sel, N_M1, reset)
---	begin
---		if reset='1' then
---			fd_port <= '1';
---		elsif rising_edge(N_M1) then 
---			fd_port <= fd_sel;
---		end if;
---	end process;
-			trdos <= BUS_N_DOS; -- 1 - boot into service rom, 0 - boot into 128 menu	
+trdos <= BUS_N_DOS; -- 1 - boot into service rom, 0 - boot into 128 menu
+
 	-- ports, write by CPU
 	process( clk_14, clk_7, reset, A, D, port_write, fd_port, port_7ffd, trdos, N_M1, N_MREQ )
 	begin
 		if reset = '1' then
 			port_7ffd <= "000000";
---			port_dffd <= "000";
---			port_1ffd <= "00000000";
+			port_1ffd <= "00000";
 			sound_out <= '0';
 			mic <= '0';
 		elsif clk_14'event and clk_14 = '1' then 
@@ -564,37 +581,45 @@ N_INT <= int;
 				if port_write = '1' then
 
 					 -- port #7FFD  
-					if A(15)='0' and A(1) = '0' and port_7ffd(5) = '0' then
+					if A(15)='0' and A(14) = '1' and A(1) = '0' and port_7ffd(5) = '0' then
 						port_7ffd <= D(5 downto 0);
 					end if;
-					 
-					 -- port #DFFD (ram ext)
---					if A = X"DFFD" and port_7ffd(5) = '0' and fd_port='1' then  
---							port_dffd <= D (2 downto 0);
---					end if;
 					
 					-- port #1FFD
---					if A = X"1FFD" and fd_port='1' then -- short decoding by A0 + A12-A15
---							port_1ffd <= D;
---					end if;
+					if A(15 downto 12) = "0001" and A(1) = '0' then -- short decoding by A1 + A12-A15
+							port_1ffd <= D(4 downto 0);
+					end if;
 					
 					-- port #FE
 					if A(0) = '0' then
 						border_attr <= D(2 downto 0); -- border attr
 						mic <= D(3); -- MIC
 						sound_out <= D(4); -- BEEPER
+					
 					end if;
 				end if;
-				
-				-- trdos flag
---				if N_M1 = '0' and N_MREQ = '0' and A(15 downto 8) = X"3D" and port_7ffd(4) = '1' then 
---					trdos <= '1';
---				elsif N_M1 = '0' and N_MREQ = '0' and A(15 downto 14) /= "00" then 
---					trdos <= '0'; 
---				end if;
 			end if;
 		end if;
-	end process;	
+	end process;
+
+--Plus-3 PORT X"1FFD"
+p3_mem_mode <= port_1ffd(0);
+p3_fdd_mot_en <= port_1ffd(3);
+p3_prn_cs <= port_1ffd(4);
+
+process(port_1ffd, port_7ffd, p3_mem_mode, p3_rom_pg, p3_ram_pg, reset, clk_14)
+begin
+	if reset = '1' then
+		p3_rom_pg <= "00";
+		p3_ram_pg <= "00";
+	elsif clk_14'event and clk_14 = '1' then
+		if p3_mem_mode='0' then
+			p3_rom_pg <= port_1ffd (2) & port_7ffd(4);
+		else
+			p3_ram_pg <= port_1ffd (2 downto 1);	
+		end if;
+	end if;
+end process;
 
 	--VRAM
 VA <= "000000000000000";
@@ -604,7 +629,7 @@ N_VRAMWR <= '1';
 BUS_F <= '0';
 
 	-- CF Card
-CF_N_CS <= '1';
+CF_N_CS <= '0' when A(4) = '0' and N_IORQ = '0' and N_M1 = '1' and BUS_N_IORQGE = '0' else '1';
 	
 	--ZC
 	U1: zcontroller 
