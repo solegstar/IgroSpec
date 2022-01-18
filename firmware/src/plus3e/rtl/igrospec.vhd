@@ -629,7 +629,7 @@ N_VRAMWR <= '1';
 BUS_F <= '0';
 
 	-- CF Card
-CF_N_CS <= '0' when A(4) = '0' and N_IORQ = '0' and N_M1 = '1' and BUS_N_IORQGE = '0' else '1';
+CF_N_CS <= '0' when A(5 downto 3) = "101" and A(1 downto 0) = "11" and N_IORQ = '0' and N_M1 = '1' and BUS_N_IORQGE = '0' else '1';
 	
 	--ZC
 	U1: zcontroller 
