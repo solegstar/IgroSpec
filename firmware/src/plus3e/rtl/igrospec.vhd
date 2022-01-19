@@ -310,10 +310,6 @@ vid_page <= '1' & port_7ffd(3) & '1';
 	MA(18) <= '1'; -- ram_page(4) when vbus_mode = '0' else '0'; CS2 for 128k SRAM
 	kb_512 <= '0'; --ram_page(5) when vbus_mode = '0' else '0';
 --	MA(20) <= '0'; -- TODO
-	
-	MD(7 downto 0) <= 
-		D(7 downto 0) when vbus_mode = '0' and ((n_is_ram = '0' or (N_IORQ = '0' and N_M1 = '1')) and N_WR = '0') else 
-		(others => 'Z');
 
 	vbus_req <= '0' when ( N_MREQ = '0' or N_IORQ = '0' ) and ( N_WR = '0' or N_RD = '0' ) else '1';
 	vbus_rdy <= '0' when clk_vid = '1' or chr_col_cnt(0) = '0' else '1';
@@ -345,7 +341,6 @@ vid_page <= '1' & port_7ffd(3) & '1';
 	-- TODO: turbo for internal bus / video memory
 --	clk_int <= clk_14 and clk_7;-- when TURBO = '0' else CLK28 and clk_14; -- internal clock for counters
 	clk_vid <= not(clk_14) and not(clk_7);-- when TURBO = '0' else CLK28 and not(clk_14); --when TURBO = '0' else CLK28 and not(clk_14) and not(clk_7); -- internal clock for video read
-	is_buf_wr <= '1' when vbus_mode = '0' and chr_col_cnt(0) = '0' else '0';
 	
 	-- todo
 	process( clk_14, clk_7 )
@@ -360,6 +355,20 @@ vid_page <= '1' & port_7ffd(3) & '1';
  
 	port_write <= '1' when N_IORQ = '0' and N_WR = '0' and N_M1 = '1' and vbus_mode = '0' else '0';
 	port_read <= '1' when N_IORQ = '0' and N_RD = '0' and N_M1 = '1' and BUS_N_IORQGE = '0' else '0';
+	
+	MD(7 downto 0) <= 
+		D(7 downto 0) when vbus_mode = '0' and ((n_is_ram = '0' or (N_IORQ = '0' and N_M1 = '1')) and N_WR = '0') else 
+		(others => 'Z');
+	
+	-- fill memory buf
+	is_buf_wr <= '1' when vbus_mode = '0' and chr_col_cnt(0) = '0' else '0';
+	
+	process(is_buf_wr, MD)
+	begin 
+		if (is_buf_wr'event and is_buf_wr = '0') then  -- high to low transition to lattch the MD into BUF
+			buf_md(7 downto 0) <= MD(7 downto 0);
+		end if;
+	end process;
 	
 	-- read ports by CPU
 	D(7 downto 0) <= 
@@ -401,15 +410,7 @@ vid_page <= '1' & port_7ffd(3) & '1';
 			clk_1_75 <= not(clk_1_75);
 		end if;
 	end process;
-	
-	-- fill memory buf
-	process(is_buf_wr, MD)
-	begin 
-		if (is_buf_wr'event and is_buf_wr = '0') then  -- high to low transition to lattch the MD into BUF
-			buf_md(7 downto 0) <= MD(7 downto 0);
-		end if;
-	end process;	
-	
+
 	-- sync, counters
 	process( clk_14, clk_7, chr_col_cnt, hor_cnt, chr_row_cnt, ver_cnt, int)
 	begin
@@ -525,9 +526,9 @@ vid_page <= '1' & port_7ffd(3) & '1';
 			end if;
 		end if;
 	end process;
-
-	-- brightness
-	process( clk_14, clk_7, paper_r, attr_r, rgbi(3 downto 1) )
+	
+ 	-- brightness
+	process( clk_14, clk_7, paper_r, attr_r, rgbi)
 	begin
 		if clk_14'event and clk_14 = '1' then
 			if (clk_7 = '1') then
@@ -539,9 +540,9 @@ vid_page <= '1' & port_7ffd(3) & '1';
 			end if;
 		end if;
 	end process;
-
+	
 	-- paper, blank
-	process( clk_14, clk_7, chr_col_cnt, hor_cnt, ver_cnt )
+	process( clk_14, clk_7, chr_col_cnt, hor_cnt, ver_cnt, attr, shift, paper, shift_r)
 	begin
 		if clk_14'event and clk_14 = '1' then
 			if (clk_7 = '1') then
