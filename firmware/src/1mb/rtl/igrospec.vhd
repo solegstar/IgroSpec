@@ -66,7 +66,7 @@ entity igrospec is
 		BUS_N_RDR	 	: in std_logic := '1';
 		BUS_RS 			: in std_logic := '0';
 		BUS_BLK		 	: in std_logic := '0';
-		BUS_N_DOS	 	: in std_logic := '1';
+		BUS_N_DOS	 	: out std_logic := '1';
 		BUS_F			 	: out std_logic := '0';
 		BUS_N_IODOS	 	: in std_logic := '1';
 
@@ -531,7 +531,9 @@ begin
 			fd_port <= fd_sel;
 		end if;
 	end process;
-			trdos <= BUS_N_DOS; -- 1 - boot into service rom, 0 - boot into 128 menu	
+--			trdos <= BUS_N_DOS; -- 1 - boot into service rom, 0 - boot into 128 menu
+	BUS_N_DOS <= not trdos;
+
 	-- ports, write by CPU
 	process( clk_14, clk_7, N_RESET, A, D, port_write, fd_port, port_7ffd, trdos, N_M1, N_MREQ )
 	begin
@@ -541,14 +543,13 @@ begin
 --			port_1ffd <= "00000000";
 			sound_out <= '0';
 			mic <= '0';
+			trdos <= '1';
 		elsif clk_14'event and clk_14 = '1' then 
 			if clk_7 = '1' then
 				if port_write = '1' then
 
 					 -- port #7FFD  
-					if A = X"7FFD" then 
-						port_7ffd <= D(5 downto 0);
-					elsif A(15)='0' and A(1) = '0' and port_7ffd(5) = '0' then
+					if A(15)='0' and A(1) = '0' and port_7ffd(5) = '0' then
 						port_7ffd <= D(5 downto 0);
 					end if;
 					 
@@ -571,11 +572,11 @@ begin
 				end if;
 				
 				-- trdos flag
---				if N_M1 = '0' and N_MREQ = '0' and A(15 downto 8) = X"3D" and port_7ffd(4) = '1' then 
---					trdos <= '1';
---				elsif N_M1 = '0' and N_MREQ = '0' and A(15 downto 14) /= "00" then 
---					trdos <= '0'; 
---				end if;
+				if N_M1 = '0' and N_MREQ = '0' and A(15 downto 8) = X"3D" and port_7ffd(4) = '1' then 
+					trdos <= '1';
+				elsif N_M1 = '0' and N_MREQ = '0' and A(15 downto 14) /= "00" then 
+					trdos <= '0'; 
+				end if;
 			end if;
 		end if;
 	end process;	
