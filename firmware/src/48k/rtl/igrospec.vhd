@@ -308,7 +308,7 @@ begin
 	zc_rd <= '1' when (N_IORQ = '0' and N_RD = '0' and A(7 downto 6) = "01" and A(4 downto 0) = "10111") else '0';
 
 	-- ZX Compact Flash interface
-	CF_N_CS <= '0' when (N_IORQ = '0' and A(4) = '0' and N_M1 = '1') else '1';
+	CF_N_CS <=  '0' when A(5 downto 3) = "101" and A(1 downto 0) = "11" and N_IORQ = '0' and N_M1 = '1' and BUS_N_IORQGE = '0' else '1';
 	
 	
 	-- clocks
