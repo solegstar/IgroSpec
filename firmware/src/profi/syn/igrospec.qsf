@@ -37,7 +37,7 @@
 
 
 set_global_assignment -name FAMILY MAX3000A
-set_global_assignment -name DEVICE "EPM3512AQC208-10"
+set_global_assignment -name DEVICE "EPM3256AQC208-10"
 set_global_assignment -name TOP_LEVEL_ENTITY igrospec
 set_global_assignment -name ORIGINAL_QUARTUS_VERSION "13.0 SP1"
 set_global_assignment -name PROJECT_CREATION_TIME_DATE "01:55:00  JULY 10, 2019"
@@ -256,3 +256,4 @@ set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
 set_instance_assignment -name CLOCK_SETTINGS CLK14 -to CLK14
 set_global_assignment -name QIP_FILE ../rtl/clk_mux.qip
 set_global_assignment -name QIP_FILE ../rtl/clk_pix_mux.qip
+set_global_assignment -name QIP_FILE ../rtl/clk_bus_mux.qip
