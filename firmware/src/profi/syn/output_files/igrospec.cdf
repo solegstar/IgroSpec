@@ -4,7 +4,7 @@ JedecChain;
 	DefaultMfr(6E);
 
 	P ActionCode(Cfg)
-		Device PartName(EPM3256AQ208) Path("D:/GitHub/IgroSpec/firmware/src/profi/syn/output_files/") File("igrospec.pof") MfrSpec(OpMask(7));
+		Device PartName(EPM3512AQ208) Path("D:/GitHub/IgroSpec/firmware/src/profi/syn/output_files/") File("igrospec.pof") MfrSpec(OpMask(7));
 
 ChainEnd;
 
