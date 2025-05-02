@@ -10,10 +10,15 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 
 entity igrospec is
+	generic (
+		enable_turbo 		 : boolean := false; -- enable Turbo mode 7MHz
+		enable_bus_n_romcs : boolean := true; -- enable external BUS_N_ROMCS signal handling
+		enable_bus_n_iorqge: boolean := true  -- enable external BUS_N_IORQGE signal handling
+	);
 	port(
 		-- Clock
 		CLK28				: in std_logic;
-		CLKX 				: in std_logic;
+		CLK24 				: in std_logic;
 
 		-- CPU signals
 		CLK_CPU			: out std_logic := '1';
@@ -32,7 +37,7 @@ entity igrospec is
 		N_BUSACK 		: in std_logic;
 		N_WAIT 			: in std_logic;
 		N_HALT			: in std_logic;
-		N_NMI 			: inout std_logic := 'Z';
+		N_NMI 			: out std_logic := 'Z';
 		N_RFSH			: in std_logic;		
 
 		-- RAM 
@@ -119,577 +124,387 @@ end igrospec;
 
 architecture rtl of igrospec is
 
-	component zcontroller is
-	 port (
-		RESET				: in std_logic;
-		CLK    			: in std_logic;
-		A   			   : in std_logic;
-		DI					: in std_logic_vector(7 downto 0);
-		DO					: out std_logic_vector(7 downto 0);
-		RD					: in std_logic;
-		WR					: in std_logic;
-		SDDET				: in std_logic;
-		SDPROT			: in std_logic;
-		CS_n				: out std_logic;
-		SCLK				: out std_logic;
-		MOSI				: out std_logic;
-		MISO				: in std_logic );
-	 end component;
 
-	signal reset      : std_logic := '0';
-
-	signal CLK 			: std_logic := '0';	
+	signal CLK 			: std_logic := '0';
+	
 	signal clk_div2 	: std_logic := '0';
 	signal clk_div4 	: std_logic := '0';
 	signal clk_div8 	: std_logic := '0';
 	signal clk_div16	: std_logic := '0';
 	
---	signal clk_int   	: std_logic := '0'; -- 7MHz short pulse to access zx bus
-	signal clk_vid 	: std_logic := '0'; -- 7MHz inversed and delayed short pulse to access video memory
-	signal clk_pix		: std_logic := '0';
-	signal clk_bus		: std_logic := '0';
-	
-	signal buf_md		: std_logic_vector(7 downto 0) := "11111111";
-	signal is_buf_wr	: std_logic := '0';	
-	
-	signal invert   	: unsigned(4 downto 0) := "00000";
+	signal clkcpu 		: std_logic := '1';	
 
-	signal chr_col_cnt: unsigned(2 downto 0) := "000"; -- Character column counter
-	signal chr_row_cnt: unsigned(2 downto 0) := "000"; -- Character row counter
-
-	signal hor_cnt  	: unsigned(6 downto 0) := "0000000"; -- Horizontal counter
-	signal ver_cnt  	: unsigned(5 downto 0) := "000000"; -- Vertical counter
-
-	signal attr     	: std_logic_vector(7 downto 0);
-	signal shift    	: std_logic_vector(7 downto 0);
-	
-	signal paper_r  	: std_logic;
-	signal blank_r  	: std_logic;
 	signal attr_r   	: std_logic_vector(7 downto 0);
-	signal shift_r  	: std_logic_vector(7 downto 0);
-	signal rgbi 	 	: std_logic_vector(3 downto 0);
-	signal int  		: std_logic;
-
+	signal vid_a 		: std_logic_vector(13 downto 0);
+	
 	signal border_attr: std_logic_vector(2 downto 0) := "000";
-	
-	signal cs_7ffd		: std_logic := '0';
-	signal cs_dffd		: std_logic := '0';
-	signal cs_fe		: std_logic := '0';
 
-	signal port_7ffd	: std_logic_vector(7 downto 0); -- D0-D2 - RAM page from address #C000
-																	  -- D3 - video RAM page: 0 - bank5, 1 - bank7 
-																	  -- D4 - ROM page A14: 0 - basic 128, 1 - basic48
-																	  -- D5 - 48k RAM lock, 1 - locked, 0 - extended memory enabled
-																	  -- D6 - not used
-																	  -- D7 - not used
-	
-	signal port_dffd  : std_logic_vector(7 downto 0); -- D0 - RAM A17'
-																	  -- D1 - RAM A18'
-																	  -- D2 - RAM A19'
-																	  -- D3 - sco
-																	  -- D4 - norom
-																	  -- D5 - cpm
-																	  -- D6 - scr
-																	  -- D7 - ds80
+	signal port_7ffd	: std_logic_vector(7 downto 0) := (others => '0'); 
+	-- CMR0 port:
+	-- D0-D2 - RAM seg A0,A1,A2 (column access)
+	-- D3 - POLEK. Video page.
+						-- 80DS=0: 0 - seg 05, 1 - seg 07 
+						-- 80DS=1: 0 - pixels seg 04, attributes seg 38
+						--         1 - pixels seg 06, attributes seg 3A
+	-- D4 - ROM14. 
+						-- CPM=0: 0 - spectrum 128, 1 - spectrum 48
+						-- CPM=1: Ext device modifier for CP/M mode
+	-- D5 - BLOCK. Block port CMR0 (WOROM=0)
+	-- D6,D7 - unused
 																	  
-	signal sco			: std_logic := '0';
-	signal norom		: std_logic := '0';
-	signal cpm			: std_logic := '0';
-	signal scr			: std_logic := '0';
-	signal ds80			: std_logic := '0';
-
+	signal port_dffd : std_logic_vector(7 downto 0) := (others => '0');
+	-- CMR1 port:
+	-- D0-D2 - RAM seg A3,A4,A5 (row access)
+	-- D3 - SCO. Window position for segments:
+						-- 0 - window 1 (#C000 - #FFFF)
+						-- 1 - window 2 (#4000 - #7FFF)
+	-- D4 - WOROM. 1 = disable CMR0 port lock, also disable ROM and switch RAM seg 00 instead of it
+	-- D5 - CPM. 1  = block controller from TR-DOS ROM and enables ports to access from RAM (ROM14=0)
+						-- also when ROM14=1 - mod. access to extended devices in CP/M mode
+	-- D6 - SCR. CPU memory instead of seg 02, also CMR0 D3 must be 1 (#8000 - #BFFF)
+	-- D7 - 80DS. 0 - Spectrum video mode (seg 05)
+				  -- 1 - Profi video mode (seg 06, 3A, 04, 38)
+																	  
+	signal ram_ext : std_logic_vector(2 downto 0) := "000";
+	signal ram_do : std_logic_vector(7 downto 0);
+	signal ram_oe_n : std_logic := '1';
+	
+	signal mem_adr : std_logic_vector(19 downto 0);
+	
+	signal N_MRD 		: std_logic;
+	signal N_MWR 		: std_logic;
+	
+	signal fd_port : std_logic := '1';
+	signal fd_sel : std_logic;	
+																	  
 	signal ay_port		: std_logic := '0';
+	signal bdir 		: std_logic;
+	signal bc1 			: std_logic;
 		
-	signal vbus_req	: std_logic := '1';
-	signal vbus_ack	: std_logic := '1';
-	signal vbus_mode	: std_logic := '1';	
-	signal vbus_rdy	: std_logic := '1';
-	
-	signal vid_rd		: std_logic := '0';
-	
-	signal paper     	: std_logic;
-
-	signal hsync     	: std_logic := '1';
-	signal vsync     	: std_logic := '1';
-
-	signal vram_acc	: std_logic;
-	
-	signal mux 			: std_logic_vector(1 downto 0);
-	
-	signal n_is_ram   : std_logic := '1';
-	signal kb_512		: std_logic := '0';
-	signal ram_page	: std_logic_vector(5 downto 0) := "000000";
-	signal vid_page	: std_logic_vector(5 downto 0) := "000000";
-	signal sram_page	: std_logic_vector(5 downto 0) := "000000";
-
-	signal n_is_rom   : std_logic := '1';
-	signal rom_page	: std_logic_vector(1 downto 0) := "00";
+	signal vbus_mode  : std_logic := '0';
 	
 	signal sound_out 	: std_logic := '0';
-	signal ear 			: std_logic := '1';
 	signal mic 			: std_logic := '0';
 	
-	signal fd_port 	: std_logic;
-	signal fd_sel 		: std_logic;
+	signal port_read	: std_logic := '0';
+	signal port_write	: std_logic := '0';
 	
 	signal zc_do_bus	: std_logic_vector(7 downto 0);
 	signal zc_wr 		: std_logic :='0';
 	signal zc_rd		: std_logic :='0';
+	signal zc_sd_cs_n: std_logic;
+	signal zc_sd_di: std_logic;
+	signal zc_sd_clk: std_logic;
 	
-	signal trdos		: std_logic :='0';
+	signal vid_rd : std_logic;
+	
+	signal trdos	: std_logic :='1';
+	
+	-- UART 
+	signal uart_oe_n   : std_logic := '1';
+	signal uart_do_bus : std_logic_vector(7 downto 0);
+	
+	-- profi special signals
+	signal cpm : std_logic := '0';
+	signal worom : std_logic := '0';
+	signal ds80 : std_logic := '0';
+	signal scr : std_logic := '0';
+	signal sco : std_logic := '0';
+	signal u25 : std_logic := '0';
+	signal onoff : std_logic := '1'; -- disable CMR1 (port_dffd)	
 
 begin
-	reset <= not(N_RESET);
 
-	n_is_rom <= '0' when N_MREQ = '0' and A(15 downto 14)  = "00" and norom = '0' and BUS_N_ROMCS = '0' else '1';
-	n_is_ram <= '0' when N_MREQ = '0' and n_is_rom = '1' else '1';
+	BUS_N_DOS <= not trdos;
 
-	-- pentagon ROM banks map (A14, A15):
-	-- 00 - bank 0, He Gluk Reset Service
-	-- 01 - bank 1, TR-DOS
-	-- 10 - bank 2, Basic-128
-	-- 11 - bank 3, Basic-48
-	rom_page <= trdos & port_7ffd(4);
-
-	ROM_A14 <= rom_page(0);
-	ROM_A15 <= rom_page(1);
 	ROM_A16 <= '0';
 	ROM_A17 <= '0';
 	ROM_A18 <= '0';
-	
-	N_ROMCS <= '0' when n_is_rom = '0' and N_RD = '0' else '1';
+
 	N_ROMWR <= '1';
-	
-	mux <= A(15 downto 14);
 
-process (mux, port_7ffd, port_dffd, sco, scr)
-	begin
-		case mux is
+	MA <= mem_adr(18 downto 0);
+	
+	N_MRD1 <= '0' when N_MRD = '0' and mem_adr(19) = '0' else '1';  
+	N_MWR1 <= '0' when N_MWR = '0' and mem_adr(19) = '0' else '1';  
+	N_MRD2 <= '0' when N_MRD = '0' and mem_adr(19) = '1' else '1';  
+	N_MWR2 <= '0' when N_MWR = '0' and mem_adr(19) = '1' else '1';  
+	--VRAM
+VA <= "000000000000000";
+N_VRAMWR <= '1';
 
-			when "00" =>		ram_page <= "000000";                 -- Seg0 ROM 0000-3FFF or Seg0 RAM 0000-3FFF	
-			when "01" =>	if sco = '0' then
-									ram_page <= "000101";
-								else 
-									ram_page <= port_dffd(2 downto 0) & port_7ffd(2 downto 0);
-								end if;
-			when "10" =>	if scr = '0' then
-									ram_page <= "000010";
-								else
-									ram_page <= "000110";
-								end if;
-			when "11" =>	if sco = '0' then
-									ram_page <= port_dffd(2 downto 0) & port_7ffd(2 downto 0);
-								else
-									ram_page <= "000111";
-								end if;
-			when others => null;
-		end case;
-	end process;
-	
-	MA(13 downto 0) <= A(13 downto 0) when vbus_mode = '0' else 
-		std_logic_vector( "0" & ver_cnt(4 downto 3) & chr_row_cnt & ver_cnt(2 downto 0) & hor_cnt(4 downto 0) ) when vbus_mode = '1' and vid_rd = '0' and ds80 = '0' else
-		std_logic_vector( "0110" & ver_cnt(4 downto 0) & hor_cnt(4 downto 0) ) when vbus_mode = '1' and vid_rd = '1' and ds80 = '0' else
-		std_logic_vector((not hor_cnt(0)) & ver_cnt(4 downto 3)) & std_logic_vector(chr_row_cnt) & std_logic_vector(ver_cnt(2 downto 0)) & std_logic_vector(hor_cnt(5 downto 1)) when vbus_mode = '1' and ds80 = '1' else
-		"00000000000000";		
+	--ZX-BUS Clock
+--BUS_F <= clk_div2;
+BUS_N_IODOS <= not cpm;
 
-	sram_page <= ram_page when vbus_mode = '0' else
-					"0001" & port_7ffd(3) & '1' when vbus_mode = '1' and ds80 = '0' else -- spectrum screen ;
-					"0001" & port_7ffd(3) & '0' when vbus_mode = '1' and ds80 = '1' and vid_rd = '0' else -- profi bitmap 
-					"1110" & port_7ffd(3) & '0' when vbus_mode = '1' and ds80 = '1' and vid_rd = '1' else -- profi attributes
-					"000000";
+	-- CF Card
+CF_N_CS <= '1';
 	
-	MA (18 downto 14) <= sram_page(4 downto 0);
-	kb_512 <= sram_page(5);
-	
-	MD(7 downto 0) <= 
-		D(7 downto 0) when vbus_mode = '0' and ((n_is_ram = '0' or (N_IORQ = '0' and N_M1 = '1')) and N_WR = '0') else 
-		(others => 'Z');
 
-	vbus_req <= '0' when ( N_MREQ = '0' or N_IORQ = '0' ) and ( N_WR = '0' or N_RD = '0' ) else '1';
-	vbus_rdy <= '0' when clk_vid = '1' or chr_col_cnt(0) = '0' else '1';
-	
-	N_MRD1 <= '0' when ((vbus_mode = '1' and vbus_rdy = '0') or (vbus_mode = '0' and N_RD = '0' and N_MREQ = '0')) and kb_512 = '0' else '1';  
-	N_MWR1 <= '0' when vbus_mode = '0' and n_is_ram = '0' and N_WR = '0' and chr_col_cnt(0) = '0' and kb_512 = '0' else '1';
-	N_MRD2 <= '0' when ((vbus_mode = '1' and vbus_rdy = '0') or (vbus_mode = '0' and N_RD = '0' and N_MREQ = '0')) and kb_512 = '1' else '1';  
-	N_MWR2 <= '0' when vbus_mode = '0' and n_is_ram = '0' and N_WR = '0' and chr_col_cnt(0) = '0' and kb_512 = '1' else '1';   
+	-- AY signals
+	ay_port <= '1' when A(7 downto 0) = x"FD" and A(15)='1' and fd_port = '1' and ((enable_bus_n_iorqge and BUS_N_IORQGE = '0') or not(enable_bus_n_iorqge)) else '0';
+	bdir <= '1' when ay_port = '1' and N_IORQ = '0' and N_WR = '0' else '0';
+	bc1 <= '1' when ay_port = '1' and A(14) = '1' and N_IORQ = '0' and (N_WR='0' or N_RD='0') else '0';
+	AY_BC1 <= bc1;
+	AY_BDIR <= bdir; 	
 
-	VIDEO_R <= rgbi(3) & rgbi(0) & '0';
-	VIDEO_G <= rgbi(2) & rgbi(0) & '0';
-	VIDEO_B <= rgbi(1) & rgbi(0) & '0';
-	VIDEO_CSYNC <= not (vsync xor hsync);
-	
+	-- beeper
 	BEEPER <= sound_out;
-	TAPE_OUT <= mic;
-	ear <= TAPE_IN;
-
-	CLK_AY <= clk_div16;
-	ay_port <= '1' when A(7 downto 0) = x"FD" and A(15)='1' and BUS_N_IORQGE = '0' else '0';
-	AY_BC1 <= '1' when ay_port = '1' and A(14) = '1' and N_IORQ = '0' and (N_WR='0' or N_RD='0') else '0';
-	AY_BDIR <= '1' when ay_port = '1' and N_IORQ = '0' and N_WR = '0' else '0';
 	
-	N_NMI <= '0' when BTN_NMI = '0' else 'Z';
-	MAPCOND <= '1';
-
-	-- TODO: turbo for internal bus / video memory
---	clk_int <= clk_div2 and clk_div4;-- when TURBO = '0' else CLK28 and clk_div2; -- internal clock for counters
-	clk_vid <= not(clk_div2) and not(clk_div4);-- when TURBO = '0' else CLK28 and not(clk_div2); --when TURBO = '0' else CLK28 and not(clk_div2) and not(clk_div4); -- internal clock for video read
+	-- NMI button
+	N_NMI <= BTN_NMI;
 	
-	-- todo
-	process( clk_div2, clk_div4 )
-	begin
-	-- rising edge of CLK14
-		if clk_div2'event and clk_div2 = '1' then
-			if clk_div4 = '1' then
-				CLK_CPU <= chr_col_cnt(0);
-				CLK_ZXBUS <= not clk_div8;
+	-- Mapcond LED control
+--	MAPCOND <= '1';
+	MAPCOND <= '0';
+	
+	 -- #FD port correction
+	 fd_sel <= '0' when vbus_mode='0' and D(7 downto 4) = "1101" and D(2 downto 0) = "011" else '1'; -- IN, OUT Z80 Command Latch
+
+	 process(fd_sel, N_M1, N_RESET)
+	 begin
+			if N_RESET='0' then
+				  fd_port <= 	'1';
+			elsif rising_edge(N_M1) then 
+				  fd_port <= fd_sel;
 			end if;
-		end if;
-	end process;
-	
-	is_buf_wr <= '1' when vbus_mode = '0' and chr_col_cnt(0) = '0' else '0';
-	
-	-- fill memory buf
-	process(is_buf_wr, MD)
-	begin 
-		if (is_buf_wr'event and is_buf_wr = '0') then  -- high to low transition to lattch the MD into BUF
-			buf_md(7 downto 0) <= MD(7 downto 0);
-		end if;
-	end process;
-	
-	-- clocks
+	 end process;
+	 
 	 -- main clock selector
 	 U0: entity work.clk_mux
 	 port map(
 		data0 => CLK28,
-		data1 => CLKX,
+		data1 => CLK24,
 		sel => ds80,
 		result => CLK
 	 );
---	 
-	 U1: entity work.clk_pix_mux
-	 port map(
-		data0 => clk_div4,
-		data1 => clk_div2,
-		sel => ds80,
-		result => clk_pix
-	 );
 
-	 U2: entity work.clk_bus_mux
-	 port map(
-		data0 => clk_div2,
-		data1 => clkx,
-		sel => ds80,
-		result => clk_bus
-	 );
+	clkcpu <= clk_div8;
+	
+--	rom14 <= port_7ffd(4);	
+	cpm <= port_dffd(5); -- 1 - блокирует работу контроллера из ПЗУ TR-DOS и включает порты на доступ из ОЗУ (ROM14=0); При ROM14=1 - мод. доступ к расширен. периферии
+	worom <= port_dffd(4); -- 1 - отключает блокировку порта 7ffd и выключает ПЗУ, помещая на его место ОЗУ из seg 00
+	ds80 <= port_dffd(7); -- 0 = seg05 spectrum bitmap, 1 = profi bitmap seg06 & seg 3a & seg 04 & seg 38
+	scr <= port_dffd(6); -- памяти CPU на место seg 02, при этом бит D3 CMR0 должен быть в 1 (#8000-#BFFF)
+	sco <= port_dffd(3); -- Выбор положения окна проецирования сегментов:
+								-- 0 - окно номер 1 (#C000-#FFFF)
+								-- 1 - окно номер 2 (#4000-#7FFF)
+	
+	ram_ext <= port_dffd(2 downto 0);
+	
+	CLK_CPU <= clkcpu;
+	--CLK_BUS <= not(clkcpu);
+	CLK_ZXBUS <= clk_div2;
+	CLK_AY	<= clk_div16;
+	
+	TAPE_OUT <= mic;
+	
+	port_write <= '1' when N_IORQ = '0' and N_WR = '0' and N_M1 = '1' else '0';
+	port_read <= '1' when N_IORQ = '0' and N_RD = '0' and N_M1 = '1' and ((enable_bus_n_iorqge and BUS_N_IORQGE = '0') or not(enable_bus_n_iorqge)) else '0';
+	
+	-- read ports by CPU
+	D(7 downto 0) <= 
+		ram_do when ram_oe_n = '0' else -- #memory
+		port_dffd when port_read = '1' and A = X"DFFD" else -- #DFFD read
+		port_7ffd when port_read = '1' and A = X"7FFD" else  -- #7FFD read
+--		'1' & TAPE_IN & '1' & kb(4 downto 0) when port_read = '1' and A(0) = '0' else -- #FE - keyboard
+		'1' & TAPE_IN & '1' & kb(4 downto 0) when port_read = '1' and A(0) = '0' else -- #FE - keyboard	
+		zc_do_bus when port_read = '1' and A(7 downto 6) = "01" and A(4 downto 0) = "10111" else -- Z-controller
+		attr_r when port_read = '1' and A(7 downto 0) = x"FF" and trdos = '0' else -- #FF - attributes (timex port never set)
+		"ZZZZZZZZ";
 
+	-- z-controller 
+	zc_wr <= '1' when (N_IORQ = '0' and N_WR = '0' and A(7 downto 6) = "01" and A(4 downto 0) = "10111") else '0';
+	zc_rd <= '1' when (N_IORQ = '0' and N_RD = '0' and A(7 downto 6) = "01" and A(4 downto 0) = "10111") else '0';
+	
 	-- clocks
-	process (CLK, clk_div2)
+	process (CLK)
 	begin 
 		if (CLK'event and CLK = '1') then 
 			clk_div2 <= not(clk_div2);
 		end if;
 	end process;
 	
-	process (clk_div2, clk_div4)
+	process (clk_div2)
 	begin 
 		if (clk_div2'event and clk_div2 = '1') then 
 			clk_div4 <= not(clk_div4);
 		end if;
 	end process;
 	
-	process (clk_div4, clk_div8)
+	process (clk_div4)
 	begin 
 		if (clk_div4'event and clk_div4 = '1') then 
 			clk_div8 <= not(clk_div8);
 		end if;
 	end process;
 
-	process (clk_div8, clk_div16)
+	process (clk_div8)
 	begin 
 		if (clk_div8'event and clk_div8 = '1') then 
 			clk_div16 <= not(clk_div16);
 		end if;
 	end process;
 	
-	-- sync, counters
-	process( clk_bus, clk_pix, chr_col_cnt, hor_cnt, chr_row_cnt, ver_cnt, int)
-	begin
-		if clk_bus'event and clk_bus = '1' then
-		
-			if clk_pix = '1' then
-			
-				if chr_col_cnt = 7 then
-				
-					if (hor_cnt = 55 and ds80 = '0') or (hor_cnt = 95 and ds80 = '1') then					-- точки
-						hor_cnt <= (others => '0');
-					else
-						hor_cnt <= hor_cnt + 1;
-					end if;
-					
-					if (hor_cnt = 39 and ds80 = '0') or (hor_cnt = 71 and ds80 = '1') then
-						if chr_row_cnt = 7 then
-							if (ver_cnt = 39 and ds80 = '0') or (ver_cnt = 39 and ds80 = '1') then			-- строки 39 для Пентагона, 38 для Спектрума и Профи
-								ver_cnt <= (others => '0');
-								invert <= invert + 1;
-							else
-								ver_cnt <= ver_cnt + 1;
-							end if;
-						end if;
-						chr_row_cnt <= chr_row_cnt + 1;
-					end if;
-				end if;
-
-				-- h/v sync
-
-				if chr_col_cnt = 7 then
-
-					if (hor_cnt(5 downto 2) = "1010" and ds80 = '0') or (hor_cnt(6 downto 3) = "1001" and ds80 = '1') then 
-						hsync <= '0';
-					else 
-						hsync <= '1';
-					end if;
-					
---					if ds80 = '0' then
---						if ver_cnt /= 31 then
---							vsync <= '0';
---						elsif chr_row_cnt = 3 or chr_row_cnt = 4 or ( chr_row_cnt = 5 and ( hor_cnt >= 40 or hor_cnt < 12 ) ) then
---							vsync <= '1';
---						else 
---							vsync <= '0';
---						end if;
---					else
---						if ver_cnt (5 downto 2) = 8 and ver_cnt(0)='0' and chr_row_cnt = 7 then
---							vsync <= '1';
---						else 
---							vsync <= '0';
---						end if;
---					end if;
-
-					if ver_cnt /= 31 then
-						vsync <= '1';
-					elsif chr_row_cnt = 3 or chr_row_cnt = 4 or ( chr_row_cnt = 5 and ( hor_cnt >= 40 or hor_cnt < 12 ) ) then
-						vsync <= '0';
-					else 
-						vsync <= '1';
-					end if;
-					
-				end if;
-
-				-- int
-				if chr_col_cnt = 6 and hor_cnt(2 downto 0) = "111" then
-					if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 3) = "100" then
-						int <= '0';
-					else
-						int <= '1';
-					end if;
-				end if;
-
-				chr_col_cnt <= chr_col_cnt + 1;
-			end if;
-		end if;
-	end process;
-
-	-- video mem
-	process( clk_bus, clk_pix, chr_col_cnt, vbus_mode, vid_rd, vbus_req, vbus_ack )
-	begin
-		-- lower edge of 7 mhz clock
-		if clk_bus'event and clk_bus = '1' then 
-			if (chr_col_cnt(0) = '1' and clk_pix = '0' and ds80 = '0') or (clk_pix = '0' and chr_col_cnt < 7 and ds80 = '1') then
-			
-				if vbus_mode = '1' then
-					if vid_rd = '0' then
-						shift <= MD;
-					else
-						attr  <= MD;
-					end if;
-				end if;
-				
-				if vbus_req = '0' and vbus_ack = '1' then
-					vbus_mode <= '0';
-				else
-					vbus_mode <= '1';
-					vid_rd <= not vid_rd;
-				end if;	
-				vbus_ack <= vbus_req;
-			end if;
-		end if;
-	end process;
-
-	paper <= '0' when ((hor_cnt(5) = '0' and ver_cnt(5 downto 0) < 24 and ds80 = '0')				--256x192
-					 or	 (hor_cnt(6) = '0' and ver_cnt(5 downto 0) < 30 and ds80 = '1')) else '1'; --512x240
-
-	-- paper, blank
-	process( clk_bus, clk_pix, chr_col_cnt, hor_cnt, ver_cnt )
-	begin
-		if clk_bus'event and clk_bus = '1' then
-			if (clk_pix = '1') then
-				if chr_col_cnt = 7 then
-					attr_r <= attr;
-					shift_r <= shift;
-
-					if (((hor_cnt(5 downto 0) > 38 and hor_cnt(5 downto 0) < 48) or ver_cnt(5 downto 1) = 15) and ds80 = '0') or												--256x192
-						(((hor_cnt(6 downto 0) > 67 and hor_cnt(6 downto 0) < 91) or (ver_cnt(5 downto 0) > 32 and ver_cnt(5 downto 0) < 36)) and ds80 = '1')	then	--512x240
-						blank_r <= '0';
-					else 
-						blank_r <= '1';
-					end if;
-
-					paper_r <= paper;
-				else
-					shift_r(7 downto 1) <= shift_r(6 downto 0);
-					shift_r(0) <= '0';
-				end if;
-			end if;
-		end if;
-	end process;
-
-	-- r/g/b
-	process( clk_bus, clk_pix, paper_r, shift_r, attr_r, invert, blank_r )
-	begin
-		if clk_bus'event and clk_bus = '1' then
-			if (clk_pix  = '1') then
-				if paper_r = '0' then           
-					if( shift_r(7) xor ( attr_r(7) and invert(4) ) ) = '1' then
-						rgbi(3) <= attr_r(1);
-						rgbi(2) <= attr_r(2);
-						rgbi(1) <= attr_r(0);
-					else
-						rgbi(3) <= attr_r(4);
-						rgbi(2) <= attr_r(5);
-						rgbi(1) <= attr_r(3);
-					end if;
-				else
-					if blank_r = '0' then
-						rgbi(3 downto 1) <= "000";
-					else
-						rgbi(3) <= border_attr(1);
-						rgbi(2) <= border_attr(2);
-						rgbi(1) <= border_attr(0);
-					end if;
-				end if;
-			end if;
-		end if;
-	end process;
-
-	-- brightness
-	process( clk_bus, clk_pix, paper_r, attr_r, rgbi(3 downto 1) )
-	begin
-		if clk_bus'event and clk_bus = '1' then
-			if (clk_pix = '1') then
-				if paper_r = '0' and attr_r(6) = '1' and rgbi(3 downto 1) /= "000" then
-					rgbi(0) <= '1';
-				else
-					rgbi(0) <= '0';
-				end if;
-			end if;
-		end if;
-	end process;
-	
-N_INT <= int;
-
-	-- #FD port correction
-	fd_sel <= '0' when D(7 downto 4) = "1101" and D(2 downto 0) = "011" else '1'; -- IN, OUT Z80 Command Latch
-
-	process(fd_sel, N_M1, reset)
-	begin
-		if reset='1' then
-			fd_port <= '1';
-		elsif rising_edge(N_M1) then 
-			fd_port <= fd_sel;
-		end if;
-	end process;
-	
-	BUS_N_DOS <= trdos; -- 0 - boot into service rom, 1 - boot into 128 menu
-
-	cs_7ffd <= '1' when A(15)='0' and A(1) = '0' and N_IORQ = '0' and N_M1 = '1' and vbus_mode = '0' else '0';
-	cs_dffd <= '1' when A = X"DFFD" and fd_port='1' and N_IORQ = '0' and N_M1 = '1' and vbus_mode = '0' else '0';
-	cs_fe		<= '1' when A(0) = '0' and N_IORQ = '0' and N_M1 = '1' and vbus_mode = '0' else '0';
-	
 	-- ports, write by CPU
-	process( clk, clk_div2, clk_div4, reset, A, D, fd_port, port_7ffd, N_M1, N_MREQ, norom )
+	process( CLK, clk_div2, clk_div4, N_RESET, A, D, port_write, port_7ffd, N_M1, N_MREQ )
 	begin
-		if reset = '1' then
-			port_7ffd <= "00000000";
-			port_dffd <= "00000000";
+		if N_RESET = '0' then
+			u25 <= '1';
+			port_7ffd <= (others => '0'); 
+			port_dffd <= (others => '0');
 			sound_out <= '0';
-			mic <= '0';
-			trdos <= '1';
-		elsif clk'event and clk = '1' then 
+			trdos <= '1'; -- 1 - boot into service rom, 0 - boot into 128 menu
+
+		elsif CLK'event and CLK = '1' then 
 		
-				-- port #7FFD  
-				if cs_7ffd = '1' and N_WR = '0' and (port_7ffd(5) = '0' or norom = '1')  then
-					port_7ffd <= D;
-				end if;
+				if port_write = '1' then
+
+					 -- port #7FFD  
+					if A(15)='0' and A(1) = '0' and port_dffd(5) = '0' then 
+						u25 <= D(4);
+					end if;
 					 
-				 -- port #DFFD (ram ext)
-				if cs_dffd = '1' and N_WR = '0' then  
-						port_dffd <= D;
-				end if;
+					if A(15)='0' and A(1) = '0' and (port_7ffd(5) = '0' or port_dffd(4)='1') then -- short decoding #FD
+						port_7ffd <= D;
+					end if;
 					
-				-- port #FE
-				if cs_fe = '1' and N_WR = '0' then
-					border_attr <= D(2 downto 0); -- border attr
-					mic <= D(3); -- MIC
-					sound_out <= D(4); -- BEEPER
+					-- port #DFFD (profi ram ext)
+					if A = X"DFFD" and fd_port='1' then
+						port_dffd <= D;
+					end if;
+					
+					-- port #FE
+					if A(0) = '0' then
+						border_attr <= D(2 downto 0); -- border attr
+						mic <= D(3); -- MIC
+						sound_out <= D(4); -- BEEPER
+					end if;
+					
 				end if;
+				
+				if port_dffd(5) = '1' then u25 <= '0'; end if;
 				
 				-- trdos flag
-				if N_M1 = '0' and N_MREQ = '0' and A(15 downto 8) = X"3D" and port_7ffd(4) = '1' then 
-					trdos <= '0';
-				elsif N_M1 = '0' and N_MREQ = '0' and A(15 downto 14) /= "00" then 
-					trdos <= '1'; 
+				if N_M1 = '0' and N_MREQ = '0' and A(15 downto 8) = X"3D" and u25 = '1' and port_dffd(5) = '0' then 
+					trdos <= '1';
+				elsif ((N_M1 = '0' and N_MREQ = '0' and A(15 downto 14) /= "00") or (port_dffd(5) = '1')) then 
+					trdos <= '0'; 
 				end if;
-
+				
 		end if;
-	end process;
+	end process;	
 
-sco 	<= port_dffd (3);
-norom <= port_dffd (4);
-cpm 	<= port_dffd (5);
-scr 	<= port_dffd (6);
-ds80 	<= port_dffd (7);
-	 
-	-- read ports by CPU
-	D(7 downto 0) <= 
-		buf_md(7 downto 0) when n_is_ram = '0' and N_RD = '0' else -- MD buf	
-		'1' & ear & '1' & KB(4 downto 0) when cs_fe = '1' and N_RD = '0' and BUS_N_IORQGE = '0' else -- #FE
-		port_7ffd when cs_7ffd = '1' and A = X"7FFD" and N_RD = '0' and BUS_N_IORQGE = '0' else -- #7FFD
-		port_dffd when cs_dffd = '1' and N_RD = '0' and BUS_N_IORQGE = '0' else -- #DFFD
-		zc_do_bus when zc_rd = '1' and BUS_N_IORQGE = '0' else -- Z-controller
---		attr_r when port_read = '1' and A(7 downto 0) = "11111111" else -- #FF
-		"ZZZZZZZZ";
+	-- memory manager
+	U1: entity work.memory 
+	generic map (
+		enable_bus_n_romcs => enable_bus_n_romcs
+	)
+	port map ( 
+		CLK2X => CLK,
+		CLKX => clk_div2,
+		CLK_CPU => clkcpu,
+		--TURBO => turbo,
+		BUS_N_ROMCS => BUS_N_ROMCS,
+		
+		-- cpu signals
+		A => A,
+		D => D,
+		N_MREQ => N_MREQ,
+		N_IORQ => N_IORQ,
+		N_WR => N_WR,
+		N_RD => N_RD,
+		N_M1 => N_M1,
 
-	-- z-controller 
-	zc_wr <= '1' when (N_IORQ = '0' and N_WR = '0' and A(7 downto 6) = "01" and A(4 downto 0) = "10111") else '0';
-	zc_rd <= '1' when (N_IORQ = '0' and N_RD = '0' and A(7 downto 6) = "01" and A(4 downto 0) = "10111") else '0';
+		-- ram 
+		MA => mem_adr,
+		MD => MD,
+		N_MRD => N_MRD,
+		N_MWR => N_MWR,
+		
+		-- ram out to cpu
+		DO => ram_do,
+		N_OE => ram_oe_n,
+		
+		-- ram pages
+		RAM_BANK => port_7ffd(2 downto 0),
+		RAM_EXT => ram_ext, -- seg A3 - seg A5
 
-	--VRAM
-VA <= "000000000000000";
-N_VRAMWR <= '1';
+		-- video
+		VA => vid_a,
+		VID_PAGE => port_7ffd(3), -- seg A0 - seg A2
+		DS80 => ds80,
+		CPM => cpm,
+		SCO => sco,
+		SCR => scr,
+		WOROM => worom,
 
-	--ZX-BUS Clock
-BUS_F <= clk;
-BUS_N_IODOS <= not cpm;
-
-	-- CF Card
-CF_N_CS <= '1';
-	
-	--ZC
-	U3: zcontroller 
+		-- video bus control signals
+		VBUS_MODE_O => vbus_mode, -- video bus mode: 0 - ram, 1 - vram
+		VID_RD_O => vid_rd, -- read attribute or pixel
+		
+		-- TRDOS 
+		TRDOS => trdos,
+		
+		-- rom
+		ROM_BANK => port_7ffd(4),
+		ROM_A14 => ROM_A14,
+		ROM_A15 => ROM_A15,
+		N_ROMCS => N_ROMCS		
+	);
+		
+	-- Z-Controller
+	U3: entity work.zcontroller 
 	port map(
-		RESET	 	=> reset,
-		CLK 		=> clk_div4,
-		A 			=> A(5),
-		DI 		=> D,
-		DO 		=> zc_do_bus,
-		RD 		=> zc_rd,
-		WR 		=> zc_wr,
-		SDDET 	=> '0',
-		SDPROT 	=> '0',
-		CS_n 		=> SD_N_CS,
-		SCLK 		=> SD_CLK,
-		MOSI 		=> SD_DI,
-		MISO 		=> SD_DO
+		RESET => not(N_RESET),
+		CLK => clk_div4,
+		A => A(5),
+		DI => D,
+		DO => zc_do_bus,
+		RD => zc_rd,
+		WR => zc_wr,
+		SDDET => '0',
+		SDPROT => '0',
+		CS_n => zc_sd_cs_n,
+		SCLK => zc_sd_clk,
+		MOSI => zc_sd_di,
+		MISO => SD_DO
+	);
+
+	-- SD card
+	SD_N_CS <= zc_sd_cs_n;
+	SD_CLK <= zc_sd_clk;
+	SD_DI <= zc_sd_di;
+	
+-- video controller
+	U5: entity work.video 
+	generic map (
+		enable_turbo => enable_turbo
+	)
+	port map (
+		CLK => clk_div2, -- 14
+		CLK2x => CLK, -- 28
+		ENA => clk_div4, -- 7
+		
+		BORDER => mic & border_attr,
+		DI => MD,
+		TURBO => turbo,
+		INTA => N_IORQ or N_M1,
+		INT => N_INT,
+		ATTR_O => attr_r, 
+		A => vid_a,
+		DS80 => ds80,
+		
+		VIDEO_R => VIDEO_R,
+		VIDEO_G => VIDEO_G,
+		VIDEO_B => VIDEO_B,
+		
+		HSYNC => open,
+		VSYNC => open,
+		CSYNC => VIDEO_CSYNC,
+
+		VBUS_MODE => vbus_mode,
+		VID_RD => vid_rd
 	);
 
 end;

@@ -207,7 +207,6 @@ set_location_assignment PIN_173 -to MA[6]
 set_location_assignment PIN_175 -to MA[5]
 set_location_assignment PIN_177 -to ROM_A18
 set_location_assignment PIN_178 -to N_MWR2
-set_location_assignment PIN_181 -to CLKX
 set_location_assignment PIN_183 -to IOE
 set_location_assignment PIN_184 -to CLK28
 set_location_assignment PIN_187 -to SD_DO
@@ -249,11 +248,14 @@ set_location_assignment PIN_58 -to BUS_N_IODOS
 set_global_assignment -name TIMEQUEST_MULTICORNER_ANALYSIS OFF
 set_global_assignment -name SMART_RECOMPILE OFF
 set_global_assignment -name FLOW_ENABLE_IO_ASSIGNMENT_ANALYSIS OFF
-set_global_assignment -name VHDL_FILE ../rtl/zcontroller.vhd
-set_global_assignment -name VHDL_FILE ../rtl/igrospec.vhd
-set_global_assignment -name PROJECT_OUTPUT_DIRECTORY output_files
 set_instance_assignment -name CLOCK_SETTINGS CLK14 -to CLK14
-set_global_assignment -name QIP_FILE ../rtl/clk_mux.qip
-set_global_assignment -name QIP_FILE ../rtl/clk_pix_mux.qip
-set_global_assignment -name QIP_FILE ../rtl/clk_bus_mux.qip
 set_location_assignment PIN_55 -to CLK_ZXBUS
+set_location_assignment PIN_181 -to CLK24
+set_global_assignment -name VHDL_FILE ../rtl/video/video.vhd
+set_global_assignment -name VHDL_FILE ../rtl/uart/ay_uart.vhd
+set_global_assignment -name VHDL_FILE ../rtl/sd/zcontroller.vhd
+set_global_assignment -name VHDL_FILE ../rtl/sd/divmmc.vhd
+set_global_assignment -name VHDL_FILE ../rtl/memory/memory.vhd
+set_global_assignment -name VHDL_FILE ../rtl/clock/clk_mux.vhd
+set_global_assignment -name VHDL_FILE ../rtl/igrospec.vhd
+set_global_assignment -name CDF_FILE output_files/Chain1.cdf

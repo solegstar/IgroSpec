@@ -4,7 +4,7 @@
 -- MODULE: LPM_MUX 
 
 -- ============================================================
--- File Name: clk_bus_mux.vhd
+-- File Name: clk_mux.vhd
 -- Megafunction Name(s):
 -- 			LPM_MUX
 --
@@ -39,7 +39,7 @@ USE ieee.std_logic_1164.all;
 LIBRARY lpm;
 USE lpm.lpm_components.all;
 
-ENTITY clk_bus_mux IS
+ENTITY clk_mux IS
 	PORT
 	(
 		data0		: IN STD_LOGIC ;
@@ -47,10 +47,10 @@ ENTITY clk_bus_mux IS
 		sel		: IN STD_LOGIC ;
 		result		: OUT STD_LOGIC 
 	);
-END clk_bus_mux;
+END clk_mux;
 
 
-ARCHITECTURE SYN OF clk_bus_mux IS
+ARCHITECTURE SYN OF clk_mux IS
 
 --	type STD_LOGIC_2D is array (NATURAL RANGE <>, NATURAL RANGE <>) of STD_LOGIC;
 
@@ -92,7 +92,7 @@ END SYN;
 -- ============================================================
 -- CNX file retrieval info
 -- ============================================================
--- Retrieval info: PRIVATE: INTENDED_DEVICE_FAMILY STRING "MAX3000A"
+-- Retrieval info: PRIVATE: INTENDED_DEVICE_FAMILY STRING "MAX7000AE"
 -- Retrieval info: PRIVATE: SYNTH_WRAPPER_GEN_POSTFIX STRING "0"
 -- Retrieval info: PRIVATE: new_diagram STRING "1"
 -- Retrieval info: LIBRARY: lpm lpm.lpm_components.all
@@ -108,9 +108,9 @@ END SYN;
 -- Retrieval info: CONNECT: @data 1 1 1 0 data1 0 0 0 0
 -- Retrieval info: CONNECT: @sel 0 0 1 0 sel 0 0 0 0
 -- Retrieval info: CONNECT: result 0 0 0 0 @result 0 0 1 0
--- Retrieval info: GEN_FILE: TYPE_NORMAL clk_bus_mux.vhd TRUE
--- Retrieval info: GEN_FILE: TYPE_NORMAL clk_bus_mux.inc FALSE
--- Retrieval info: GEN_FILE: TYPE_NORMAL clk_bus_mux.cmp TRUE
--- Retrieval info: GEN_FILE: TYPE_NORMAL clk_bus_mux.bsf FALSE
--- Retrieval info: GEN_FILE: TYPE_NORMAL clk_bus_mux_inst.vhd FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL clk_mux.vhd TRUE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL clk_mux.inc FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL clk_mux.cmp TRUE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL clk_mux.bsf FALSE
+-- Retrieval info: GEN_FILE: TYPE_NORMAL clk_mux_inst.vhd FALSE
 -- Retrieval info: LIB_FILE: lpm
