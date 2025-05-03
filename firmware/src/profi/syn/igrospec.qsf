@@ -48,7 +48,7 @@ set_global_assignment -name EDA_OUTPUT_DATA_FORMAT VHDL -section_id eda_simulati
 
 set_global_assignment -name FMAX_REQUIREMENT "28 MHz"
 set_global_assignment -name FMAX_REQUIREMENT "28 MHz" -section_id CLK14
-set_global_assignment -name MAX7000_OPTIMIZATION_TECHNIQUE BALANCED
+set_global_assignment -name MAX7000_OPTIMIZATION_TECHNIQUE AREA
 set_global_assignment -name AUTO_LCELL_INSERTION ON
 set_global_assignment -name OPTIMIZE_HOLD_TIMING OFF
 set_global_assignment -name AUTO_GLOBAL_CLOCK_MAX ON
@@ -251,6 +251,7 @@ set_global_assignment -name FLOW_ENABLE_IO_ASSIGNMENT_ANALYSIS OFF
 set_instance_assignment -name CLOCK_SETTINGS CLK14 -to CLK14
 set_location_assignment PIN_55 -to CLK_ZXBUS
 set_location_assignment PIN_181 -to CLK24
+set_global_assignment -name VHDL_FILE ../rtl/pallete/pallete.vhd
 set_global_assignment -name VHDL_FILE ../rtl/video/video.vhd
 set_global_assignment -name VHDL_FILE ../rtl/uart/ay_uart.vhd
 set_global_assignment -name VHDL_FILE ../rtl/sd/zcontroller.vhd
@@ -259,3 +260,4 @@ set_global_assignment -name VHDL_FILE ../rtl/memory/memory.vhd
 set_global_assignment -name VHDL_FILE ../rtl/clock/clk_mux.vhd
 set_global_assignment -name VHDL_FILE ../rtl/igrospec.vhd
 set_global_assignment -name CDF_FILE output_files/Chain1.cdf
+set_global_assignment -name QIP_FILE ../rtl/pallete/pallete.qip

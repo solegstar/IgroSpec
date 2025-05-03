@@ -137,7 +137,9 @@ architecture rtl of igrospec is
 	signal attr_r   	: std_logic_vector(7 downto 0);
 	signal vid_a 		: std_logic_vector(13 downto 0);
 	
-	signal border_attr: std_logic_vector(2 downto 0) := "000";
+	signal border_attr: std_logic_vector(7 downto 0) := x"00";
+	signal cs_7e 		: std_logic := '0';
+	signal GX0	 		: std_logic := '1';
 
 	signal port_7ffd	: std_logic_vector(7 downto 0) := (others => '0'); 
 	-- CMR0 port:
@@ -246,10 +248,12 @@ CF_N_CS <= '1';
 	bdir <= '1' when ay_port = '1' and N_IORQ = '0' and N_WR = '0' else '0';
 	bc1 <= '1' when ay_port = '1' and A(14) = '1' and N_IORQ = '0' and (N_WR='0' or N_RD='0') else '0';
 	AY_BC1 <= bc1;
-	AY_BDIR <= bdir; 	
-
+	AY_BDIR <= bdir;
+	
+	-- Tape Out bit
+	TAPE_OUT <= border_attr(3);
 	-- beeper
-	BEEPER <= sound_out;
+	BEEPER <= border_attr(4);
 	
 	-- NMI button
 	N_NMI <= BTN_NMI;
@@ -297,18 +301,16 @@ CF_N_CS <= '1';
 	CLK_ZXBUS <= clk_div2;
 	CLK_AY	<= clk_div16;
 	
-	TAPE_OUT <= mic;
-	
 	port_write <= '1' when N_IORQ = '0' and N_WR = '0' and N_M1 = '1' else '0';
 	port_read <= '1' when N_IORQ = '0' and N_RD = '0' and N_M1 = '1' and ((enable_bus_n_iorqge and BUS_N_IORQGE = '0') or not(enable_bus_n_iorqge)) else '0';
 	
 	-- read ports by CPU
 	D(7 downto 0) <= 
 		ram_do when ram_oe_n = '0' else -- #memory
-		port_dffd when port_read = '1' and A = X"DFFD" else -- #DFFD read
-		port_7ffd when port_read = '1' and A = X"7FFD" else  -- #7FFD read
+--		port_dffd when port_read = '1' and A = X"DFFD" else -- #DFFD read
+--		port_7ffd when port_read = '1' and A = X"7FFD" else  -- #7FFD read
 --		'1' & TAPE_IN & '1' & kb(4 downto 0) when port_read = '1' and A(0) = '0' else -- #FE - keyboard
-		'1' & TAPE_IN & '1' & kb(4 downto 0) when port_read = '1' and A(0) = '0' else -- #FE - keyboard	
+		GX0 & TAPE_IN & '1' & kb(4 downto 0) when port_read = '1' and A(0) = '0' else -- #FE - keyboard	
 		zc_do_bus when port_read = '1' and A(7 downto 6) = "01" and A(4 downto 0) = "10111" else -- Z-controller
 		attr_r when port_read = '1' and A(7 downto 0) = x"FF" and trdos = '0' else -- #FF - attributes (timex port never set)
 		"ZZZZZZZZ";
@@ -353,7 +355,6 @@ CF_N_CS <= '1';
 			u25 <= '1';
 			port_7ffd <= (others => '0'); 
 			port_dffd <= (others => '0');
-			sound_out <= '0';
 			trdos <= '1'; -- 1 - boot into service rom, 0 - boot into 128 menu
 
 		elsif CLK'event and CLK = '1' then 
@@ -375,11 +376,9 @@ CF_N_CS <= '1';
 					end if;
 					
 					-- port #FE
-					if A(0) = '0' then
-						border_attr <= D(2 downto 0); -- border attr
-						mic <= D(3); -- MIC
-						sound_out <= D(4); -- BEEPER
-					end if;
+--					if A(0) = '0' then
+--						border_attr <= D; -- border attr
+--					end if;
 					
 				end if;
 				
@@ -393,7 +392,11 @@ CF_N_CS <= '1';
 				end if;
 				
 		end if;
-	end process;	
+	end process;
+	
+	-- порты #7e - пишутся по фронту /wr
+	border_attr <= D when A(0) = '0' and N_IORQ = '0' and  N_M1 = '1' and (N_WR'event and N_WR = '1');
+	cs_7e <= '1' when A(0) = '0' and A(7) = '0' and N_IORQ = '0' and  N_M1 = '1' else '0';
 
 	-- memory manager
 	U1: entity work.memory 
@@ -486,7 +489,9 @@ CF_N_CS <= '1';
 		CLK2x => CLK, -- 28
 		ENA => clk_div4, -- 7
 		
-		BORDER => mic & border_attr,
+		N_RESET => N_RESET,
+		
+		BORDER => border_attr,
 		DI => MD,
 		TURBO => turbo,
 		INTA => N_IORQ or N_M1,
@@ -494,6 +499,11 @@ CF_N_CS <= '1';
 		ATTR_O => attr_r, 
 		A => vid_a,
 		DS80 => ds80,
+		
+		CS7E => cs_7e,
+		BUS_A => A (15 downto 8),
+		BUS_WR_N => N_WR,
+		GX0 => GX0,
 		
 		VIDEO_R => VIDEO_R,
 		VIDEO_G => VIDEO_G,
