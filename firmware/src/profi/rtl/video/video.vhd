@@ -33,6 +33,11 @@ entity video is
 		CSYNC		: out std_logic;
 		
 		DS80		: in std_logic; -- 1 = Profi CP/M mode. 0 = standard mode
+		CS7E 		: in std_logic := '0';
+		BUS_A 	: in std_logic_vector(15 downto 8);
+		BUS_D 	: in std_logic_vector(7 downto 0);
+		BUS_WR_N : in std_logic;
+		GX0 		: out std_logic;
 		
 		VBUS_MODE : in std_logic := '0'; -- 1 = video bus, 2 = cpu bus
 		VID_RD : in std_logic -- 1 = read attribute, 0 = read pixel data
@@ -43,6 +48,21 @@ architecture rtl of video is
 
 	signal rgb 	 		: std_logic_vector(2 downto 0);
 	signal i 			: std_logic;
+	
+	type t_palette is array (0 to 15) of std_logic_vector(8 downto 0);
+	signal palette		: t_palette := (
+		0 => "000000000", 1 => "000000100", 2 =>  "000100000", 3 =>  "000100100", 4 =>  "100000000", 5 =>  "100000100", 6 =>  "100100000", 7 =>  "100100100",
+		8 => "000000000", 9 => "000000110", 10 => "000110000", 11 => "000110110", 12 => "110000000", 13 => "110000110", 14 => "110110000", 15 => "110110110"
+	);
+	
+	signal palette_a 	: std_logic_vector(3 downto 0);
+	signal palette_wr_a 	: std_logic_vector(3 downto 0);
+	signal palette_wr_data 	: std_logic_vector(7 downto 0);
+	signal palette_wr : std_logic := '0';
+	signal palette_need_wr : std_logic := '0';
+	signal palette_grb: std_logic_vector(8 downto 0);
+	signal palette_grb_reg: std_logic_vector(8 downto 0);
+	signal palette_prev : std_logic_vector(15 downto 8);
 
 	signal invert   : unsigned(4 downto 0) := "00000";
 
@@ -356,17 +376,63 @@ begin
 					 or	 (hor_cnt(6) = '0' and ver_cnt(5 downto 0) < 30 and ds80 = '1')) else '1'; --512x240
 	INT <= int_sig;
 	
-	-- RGBS output
-	VIDEO_R <= "000" when rgb = "000" else 
-				  rgb(2) & rgb(2) & '1' when i = '1' else 
-				  rgb(2) & "ZZ";
-	VIDEO_G <= "000" when rgb = "000" else 
-				  rgb(1) & rgb(1) & '1' when i = '1' else 
-				  rgb(1) & "ZZ";
-	VIDEO_B <= "000" when rgb = "000" else 
-			  rgb(0) & rgb(0) & '1' when i = '1' else 
-			  rgb(0) & "ZZ";	
+--	-- RGBS output
+--	VIDEO_R <= "000" when rgb = "000" else 
+--				  rgb(2) & rgb(2) & '1' when i = '1' else 
+--				  rgb(2) & "ZZ";
+--	VIDEO_G <= "000" when rgb = "000" else 
+--				  rgb(1) & rgb(1) & '1' when i = '1' else 
+--				  rgb(1) & "ZZ";
+--	VIDEO_B <= "000" when rgb = "000" else 
+--			  rgb(0) & rgb(0) & '1' when i = '1' else 
+--			  rgb(0) & "ZZ";	
 			  
 	CSYNC <= not (vsync xor hsync);
+	
+	-- Палитра profi:
+
+	-- 1) палитра - это память на 16 ячеек. каждая ячейка - 8-битное значение цвета в виде GGGRRRBB
+	-- 2) в палитру пишется инвертированное значение старшей половины адреса ША по адресу, заданному в порту #FE (тоже инвертированное значение)
+	-- 3) строб записи по схеме формируется при обращении к порту палитры #7E в режиме DS80
+	-- 4) при чтении адресом выступает код цвета от видеоконтроллера - YGRB
+			
+	-- запись палитры
+	process(CLK2x, CLK, reset, palette_wr, palette_a, palette_wr_data, palette)
+	begin
+		if reset = '1' then 
+			-- set default palette on reset
+			palette <= (
+				0 => "000000000", 1 => "000000100", 2 =>  "000100000", 3 =>  "000100100", 4 =>  "100000000", 5 =>  "100000100", 6 =>  "100100000", 7 =>  "100100100",
+				8 => "000000000", 9 => "000000110", 10 => "000110000", 11 => "000110110", 12 => "110000000", 13 => "110000110", 14 => "110110000", 15 => "110110110"
+			);
+		elsif rising_edge(CLK2x) then 
+			if CLK = '1' and palette_wr = '1' then
+					palette(to_integer(unsigned(BORDER(3 downto 0) xor X"F"))) <= (not BUS_A) & BORDER(7);
+			end if;
+		end if;
+	end process;
+	
+	palette_a <= i & rgb(1) & rgb(2) & rgb(0);
+   palette_wr <= '1' when CS7E = '1' and BUS_WR_N = '0' and ds80 = '1' and reset = '0' else '0';
+
+	-- чтение из палитры
+	palette_grb <= palette(to_integer(unsigned(palette_a)));
+	
+	-- возвращаем наверх (top level) значение младшего разряда зеленого компонента палитры, это служит для отпределения наличия палитры в системе
+	GX0 <= palette_grb(6) xor palette_grb(0) when ds80 = '1' else '1';
+	
+	-- применяем blank для профи, ибо в видеоконтроллере он после палитры
+	process(CLK2x, CLK, blank_profi, palette_grb, ds80) 
+	begin 
+		if (blank_profi = '1' and ds80='1') then
+			palette_grb_reg <= (others => '0');
+		else
+			palette_grb_reg <= palette_grb;
+		end if;
+	end process;
+	
+	VIDEO_R <= palette_grb_reg(5 downto 3);
+	VIDEO_G <= palette_grb_reg(8 downto 6);
+	VIDEO_B <= palette_grb_reg(2 downto 0);
 
 end architecture;
