@@ -312,7 +312,7 @@ CF_N_CS <= '1';
 --		'1' & TAPE_IN & '1' & kb(4 downto 0) when port_read = '1' and A(0) = '0' else -- #FE - keyboard
 		GX0 & TAPE_IN & '1' & kb(4 downto 0) when port_read = '1' and A(0) = '0' else -- #FE - keyboard	
 		zc_do_bus when port_read = '1' and A(7 downto 6) = "01" and A(4 downto 0) = "10111" else -- Z-controller
-		attr_r when port_read = '1' and A(7 downto 0) = x"FF" and trdos = '0' else -- #FF - attributes (timex port never set)
+--		attr_r when port_read = '1' and A(7 downto 0) = x"FF" and trdos = '0' else -- #FF - attributes (timex port never set)
 		"ZZZZZZZZ";
 
 	-- z-controller 
