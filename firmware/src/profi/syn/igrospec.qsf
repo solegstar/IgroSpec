@@ -93,11 +93,7 @@ set_global_assignment -name FORCE_FITTER_TO_AVOID_PERIPHERY_PLACEMENT_WARNINGS O
 set_global_assignment -name MAX7000_DEVICE_IO_STANDARD "3.3-V LVTTL"
 
 
-set_location_assignment PIN_3 -to ROM_A16
 set_location_assignment PIN_4 -to N_ROMWR
-set_location_assignment PIN_8 -to ROM_A14
-set_location_assignment PIN_7 -to ROM_A15
-set_location_assignment PIN_10 -to ROM_A17
 set_location_assignment PIN_17 -to MAPCOND
 set_location_assignment PIN_18 -to AY_BC1
 set_location_assignment PIN_22 -to TAPE_OUT
@@ -205,7 +201,6 @@ set_location_assignment PIN_171 -to MA[12]
 set_location_assignment PIN_172 -to MA[7]
 set_location_assignment PIN_173 -to MA[6]
 set_location_assignment PIN_175 -to MA[5]
-set_location_assignment PIN_177 -to ROM_A18
 set_location_assignment PIN_178 -to N_MWR2
 set_location_assignment PIN_183 -to IOE
 set_location_assignment PIN_184 -to CLK28
@@ -251,9 +246,15 @@ set_global_assignment -name FLOW_ENABLE_IO_ASSIGNMENT_ANALYSIS OFF
 set_instance_assignment -name CLOCK_SETTINGS CLK14 -to CLK14
 set_location_assignment PIN_55 -to CLK_ZXBUS
 set_location_assignment PIN_181 -to CLK24
+set_global_assignment -name VHDL_FILE ../rtl/ROM/ROM.vhd
 set_global_assignment -name VHDL_FILE ../rtl/sd/zcontroller.vhd
 set_global_assignment -name VHDL_FILE ../rtl/video/video.vhd
 set_global_assignment -name VHDL_FILE ../rtl/memory/memory.vhd
 set_global_assignment -name VHDL_FILE ../rtl/clock/clk_mux.vhd
 set_global_assignment -name VHDL_FILE ../rtl/igrospec.vhd
 set_global_assignment -name CDF_FILE output_files/Chain1.cdf
+set_location_assignment PIN_8 -to ROM_A[14]
+set_location_assignment PIN_7 -to ROM_A[15]
+set_location_assignment PIN_3 -to ROM_A[16]
+set_location_assignment PIN_10 -to ROM_A[17]
+set_location_assignment PIN_177 -to ROM_A[18]

@@ -56,11 +56,7 @@ entity igrospec is
 		-- ROM
 		N_ROMCS			: out std_logic := '1';
 		N_ROMWR			: out std_logic := '1';
-		ROM_A14 			: out std_logic := '0';
-		ROM_A15 			: out std_logic := '0';
-		ROM_A16 			: out std_logic := '0';
-		ROM_A17 			: out std_logic := '0';
-		ROM_A18 			: out std_logic := '0';
+		ROM_A				: out std_logic_vector (18 downto 14);
 		
 		-- ZX BUS signals
 		BUS_N_IORQGE 	: in std_logic := '0';
@@ -209,6 +205,7 @@ architecture rtl of igrospec is
 	signal vid_rd : std_logic;
 	
 	signal trdos	: std_logic :='1';
+	signal IORQGE_ROM	: std_logic :='1';
 	
 	-- UART 
 	signal uart_oe_n   : std_logic := '1';
@@ -282,13 +279,13 @@ begin
 		VID_RD_O => vid_rd, -- read attribute or pixel
 		
 		-- TRDOS 
-		TRDOS => trdos,
+		TRDOS => not trdos,
 		
 		-- rom
 		ROM_BANK => port_7ffd(4),
-		ROM_A14 => ROM_A14,
-		ROM_A15 => ROM_A15,
-		N_ROMCS => N_ROMCS		
+		ROM_A14 => ROM_A(14),
+		ROM_A15 => open,
+		N_ROMCS => open		
 	);
 		
 	-- Z-Controller
@@ -354,6 +351,26 @@ begin
 		VID_RD => vid_rd
 	);
 	
+	U4: entity work.ROM
+	port map (
+		CLK				=> CLK,
+		ADR				=> A(15 downto 0),
+		DATA				=> D(7 downto 0),
+		nRESET			=> N_RESET,
+		nWR				=> N_WR,
+		nRD				=> N_RD,
+		nIORQ				=> N_IORQ,
+		nMREQ				=> N_MREQ,
+		nDOS				=> trdos,
+		nROM_EN			=> worom,
+		blok				=> open,
+		rom_a(18 downto 15)	=> ROM_A(18 downto 15),
+		rom_we			=> N_ROMWR,
+		rom_oe			=> N_ROMCS,
+		IORQGE_ROM		=> IORQGE_ROM,
+		OE_BUF			=> open
+		);
+	
 	-- clocks
 	process (CLK)
 	begin 
@@ -384,11 +401,11 @@ begin
 	end process;
 
 	-- ROM
-	ROM_A16 <= '0';
-	ROM_A17 <= '0';
-	ROM_A18 <= '0';
+--	ROM_A16 <= '0';
+--	ROM_A17 <= '0';
+--	ROM_A18 <= '0';
 
-	N_ROMWR <= '1';
+--	N_ROMWR <= '1';
 
 	--RAM
 	MA <= mem_adr(18 downto 0);
@@ -417,7 +434,7 @@ begin
 	--ZX-BUS Signals
 	BUS_F <= clk_div2;
 	BUS_N_IODOS <= not cpm;
-	BUS_N_DOS <= not trdos;
+	BUS_N_DOS <= trdos;
 	CLK_CPU <= clkcpu;
 	CLK_ZXBUS <= clk_div2;
 	CLK_AY	<= clk_div16;
@@ -468,16 +485,10 @@ begin
 	process( CLK, N_RESET, A, D, port_7ffd, N_M1, N_MREQ )
 	begin
 		if N_RESET = '0' then
-			port_7ffd <= (others => '0'); 
 			port_dffd <= (others => '0');
-			trdos <= '1'; -- 1 - boot into service rom, 0 - boot into 128 menu
+			trdos <= '0'; -- 1 - boot into service rom, 0 - boot into 128 menu
 
 		elsif CLK'event and CLK = '1' then 
-
-				 -- port #7FFD 
-				if cs_7ffd = '1' and N_WR = '0' and (port_7ffd(5) = '0' or port_dffd(4)='1') then -- short decoding #FD
-					port_7ffd <= D;
-				end if;
 
 				-- port #DFFD (profi ram ext)
 				if cs_dffd = '1' and N_WR = '0' then
@@ -490,10 +501,10 @@ begin
 				end if;
 
 				-- trdos flag
-				if N_M1 = '0' and N_MREQ = '0' and A(15 downto 8) = X"3D" and rom14 = '1' and cpm = '0' then 
-					trdos <= '1';
-				elsif ((N_M1 = '0' and N_MREQ = '0' and A(15 downto 14) /= "00") or (cpm = '1')) then 
-					trdos <= '0'; 
+				if N_M1 = '0' and N_MREQ = '0' and A(15 downto 8) = X"3D" and rom14 = '1' then 
+					trdos <= '0';
+				elsif ((N_M1 = '0' and N_MREQ = '0' and A(15 downto 14) /= "00")) then 
+					trdos <= '1'; 
 				end if;
 				
 		end if;
@@ -502,6 +513,18 @@ begin
 	-- порты #7e - пишутся по фронту /wr
 	pal_attr <= D when cs_fe = '1' and (N_WR'event and N_WR = '1');
 	cs_7e <= '1' when cs_fe = '1' and A(7) = '0' else '0';
+	
+process (N_WR)
+begin
+	if N_RESET = '0' then
+		port_7ffd <= (others => '0');
+	elsif  N_WR'event and N_WR = '1' then 
+		-- port #7FFD 
+		if cs_7ffd = '1' and IORQGE_ROM = '0' and (port_7ffd(5) = '0' or port_dffd(4)='1') then -- short decoding #FD
+			port_7ffd <= D;
+		end if;
+	end if;
+end process;
 	
 	-- read ports by CPU
 process (selector, ram_do, port_dffd, port_7ffd, zc_do_bus, GX0, TAPE_IN, KB, attr_r)
@@ -523,7 +546,7 @@ selector <=
 	x"2" when cs_7ffd = '1' and A = X"7FFD" and N_RD = '0' and BUS_N_IORQGE = '0' else  -- #7FFD read
 	x"3" when zc_rd = '1' and BUS_N_IORQGE = '0' else -- Z-controller
 	x"4" when cs_fe = '1' and N_RD = '0' and BUS_N_IORQGE = '0' else -- #FE - keyboard
-	x"5" when pFF_CS = '0' and N_IORQ = '0' and N_RD = '0' and A(7 downto 0) = x"FF" and trdos = '0' and cpm = '0' and DS80 = '0' and BUS_N_IORQGE = '0' else -- #FF - attributes (timex port never set)
+	x"5" when pFF_CS = '0' and N_IORQ = '0' and N_RD = '0' and A(7 downto 0) = x"FF" and trdos = '1' and cpm = '0' and DS80 = '0' and BUS_N_IORQGE = '0' else -- #FF - attributes (timex port never set)
 	(others => '1');
 
 end;
