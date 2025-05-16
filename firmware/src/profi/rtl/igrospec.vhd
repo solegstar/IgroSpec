@@ -58,7 +58,7 @@ entity igrospec is
 		
 		-- ZX BUS signals
 		BUS_N_IORQGE 	: in std_logic := '0';
-		BUS_N_ROMCS 	: in std_logic := '1';
+		BUS_N_ROMCS 	: out std_logic := '1';
 		CLK_ZXBUS		: out std_logic := '1';
 		BUS_N_RDR	 	: in std_logic := '1';
 		BUS_RS 			: in std_logic := '0';
@@ -169,6 +169,8 @@ architecture rtl of igrospec is
 	signal ram_do 		: std_logic_vector(7 downto 0);
 	signal ram_oe_n 	: std_logic := '1';
 	
+	signal rom_oe_n 	: std_logic := '1';
+	
 	signal mem_adr 	: std_logic_vector(19 downto 0);
 	
 	signal N_MRD 		: std_logic;
@@ -235,7 +237,7 @@ begin
 		CLKX => clk_div2,
 		CLK_CPU => clkcpu,
 		--TURBO => turbo,
-		BUS_N_ROMCS => BUS_N_ROMCS,
+		BUS_N_ROMCS => BUS_N_RDR,
 		
 		-- cpu signals
 		A => A,
@@ -352,7 +354,7 @@ begin
 		nROM_EN			=> worom,
 		rom_a(18 downto 14)	=> ROM_A(18 downto 14),
 		rom_we			=> N_ROMWR,
-		rom_oe			=> N_ROMCS,
+		rom_oe			=> rom_oe_n,
 		IORQGE_ROM		=> IORQGE_ROM
 	);
 	
@@ -384,6 +386,9 @@ begin
 			clk_div16 <= not(clk_div16);
 		end if;
 	end process;
+	
+	-- ROM
+	N_ROMCS <= rom_oe_n;
 
 	--RAM
 	MA <= mem_adr(18 downto 0);
@@ -413,6 +418,7 @@ begin
 	BUS_F <= clk_div2;
 	BUS_N_IODOS <= not cpm;
 	BUS_N_DOS <= trdos;
+	BUS_N_ROMCS <= rom_oe_n;
 	CLK_CPU <= clkcpu;
 	CLK_ZXBUS <= clk_div2;
 	CLK_AY	<= clk_div16;
