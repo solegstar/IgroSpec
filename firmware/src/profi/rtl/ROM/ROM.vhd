@@ -15,13 +15,12 @@ entity ROM is
 		nIORQ				:in std_logic;
 		nMREQ				:in std_logic;
 		nDOS				:in std_logic;
+		ROM14				:in std_logic;
 		nROM_EN			:in std_logic;
-		blok				:out std_logic;
-		rom_a				:out std_logic_vector (18 downto 15);
+		rom_a				:out std_logic_vector (18 downto 14);
 		rom_we			:out std_logic;
 		rom_oe			:out std_logic;
-		IORQGE_ROM		:out std_logic;
-		OE_BUF			:out std_logic
+		IORQGE_ROM		:out std_logic
 	);
 end ROM;
 
@@ -94,17 +93,15 @@ process(CLK, nWR, nRESET, DATA)
 		end if;
 end process;
 
+rom_a(14) <= ROM14;
 rom_a(15) <= nDOS xor reg_1ffd(3);
 rom_a(16) <= romreg_37(0);
 rom_a(17) <= romreg_37(1);
 rom_a(18) <= romreg_37(2);
 
-blok <= '0';
-
 rom_we <= rom_en or mem_wr or not romreg_37(7);
 rom_oe <= rom_en or mem_rd;
-
-OE_BUF <= cs_romreg_37 and cs_reg_1ffd and (rom_en or (nRD and nWR));	 
+ 
 IORQGE_ROM <= not (cs_romreg_37 and cs_reg_1ffd);
 
 end ROM_arch;

@@ -11,9 +11,7 @@ use IEEE.numeric_std.all;
 
 entity igrospec is
 	generic (
-		enable_turbo 		 : boolean := false; -- enable Turbo mode 7MHz
-		enable_bus_n_romcs : boolean := true; -- enable external BUS_N_ROMCS signal handling
-		enable_bus_n_iorqge: boolean := true  -- enable external BUS_N_IORQGE signal handling
+		enable_turbo 	: boolean := false -- enable Turbo mode 7MHz
 	);
 	port(
 		-- Clock
@@ -136,7 +134,7 @@ architecture rtl of igrospec is
 
 	signal cs_fe 		: std_logic := '0';
 	signal border_attr: std_logic_vector(7 downto 0) := x"00";
-	signal pal_attr: std_logic_vector(7 downto 0) := x"00";
+	signal pal_attr	: std_logic_vector(7 downto 0) := x"00";
 	signal cs_7e 		: std_logic := '0';
 	signal GX0	 		: std_logic := '1';
 
@@ -152,9 +150,9 @@ architecture rtl of igrospec is
 						-- CPM=1: Ext device modifier for CP/M mode
 	-- D5 - BLOCK. Block port CMR0 (WOROM=0)
 	-- D6,D7 - unused
-	signal rom14 : std_logic := '0';	
+	signal rom14 		: std_logic := '0';	
 																	  
-	signal port_dffd : std_logic_vector(7 downto 0) := (others => '0');
+	signal port_dffd 	: std_logic_vector(7 downto 0) := (others => '0');
 	-- CMR1 port:
 	-- D0-D2 - RAM seg A3,A4,A5 (row access)
 	-- D3 - SCO. Window position for segments:
@@ -167,24 +165,24 @@ architecture rtl of igrospec is
 	-- D7 - 80DS. 0 - Spectrum video mode (seg 05)
 				  -- 1 - Profi video mode (seg 06, 3A, 04, 38)
 																	  
-	signal ram_ext : std_logic_vector(2 downto 0) := "000";
-	signal ram_do : std_logic_vector(7 downto 0);
-	signal ram_oe_n : std_logic := '1';
+	signal ram_ext 	: std_logic_vector(2 downto 0) := "000";
+	signal ram_do 		: std_logic_vector(7 downto 0);
+	signal ram_oe_n 	: std_logic := '1';
 	
-	signal mem_adr : std_logic_vector(19 downto 0);
+	signal mem_adr 	: std_logic_vector(19 downto 0);
 	
 	signal N_MRD 		: std_logic;
 	signal N_MWR 		: std_logic;
 	
-	signal fd_port : std_logic := '1';
-	signal fd_sel : std_logic;
+	signal fd_port 	: std_logic := '1';
+	signal fd_sel 		: std_logic;
 	
 	-- Port selectors
-	signal selector		: std_logic_vector(3 downto 0);
-	signal cs_7ffd 		: std_logic := '0';
-	signal cs_1ffd 		: std_logic := '0';
-	signal cs_dffd 		: std_logic := '0';
-	signal cs_fffd 		: std_logic := '0';
+	signal selector	: std_logic_vector(3 downto 0);
+	signal cs_7ffd 	: std_logic := '0';
+	signal cs_1ffd 	: std_logic := '0';
+	signal cs_dffd 	: std_logic := '0';
+	signal cs_fffd 	: std_logic := '0';
 																	  
 	signal ay_port		: std_logic := '0';
 	signal bdir 		: std_logic;
@@ -198,26 +196,26 @@ architecture rtl of igrospec is
 	signal zc_do_bus	: std_logic_vector(7 downto 0);
 	signal zc_wr 		: std_logic :='0';
 	signal zc_rd		: std_logic :='0';
-	signal zc_sd_cs_n: std_logic;
-	signal zc_sd_di: std_logic;
-	signal zc_sd_clk: std_logic;
+	signal zc_sd_cs_n	: std_logic;
+	signal zc_sd_di	: std_logic;
+	signal zc_sd_clk	: std_logic;
 	
-	signal vid_rd : std_logic;
+	signal vid_rd 		: std_logic;
 	
-	signal trdos	: std_logic :='1';
+	signal trdos		: std_logic :='1';
 	signal IORQGE_ROM	: std_logic :='1';
 	
 	-- UART 
-	signal uart_oe_n   : std_logic := '1';
-	signal uart_do_bus : std_logic_vector(7 downto 0);
+	signal uart_oe_n		: std_logic := '1';
+	signal uart_do_bus	: std_logic_vector(7 downto 0);
 	
 	-- profi special signals
-	signal cpm : std_logic := '0';
-	signal worom : std_logic := '0';
-	signal ds80 : std_logic := '0';
-	signal scr : std_logic := '0';
-	signal sco : std_logic := '0';
-	signal onoff : std_logic := '1'; -- disable CMR1 (port_dffd)	
+	signal cpm 			: std_logic := '0';
+	signal worom 		: std_logic := '0';
+	signal ds80 		: std_logic := '0';
+	signal scr 			: std_logic := '0';
+	signal sco 			: std_logic := '0';
+	signal onoff 		: std_logic := '1'; -- disable CMR1 (port_dffd)	
 
 begin
 
@@ -232,9 +230,6 @@ begin
 
 	-- memory manager
 	U1: entity work.memory 
-	generic map (
-		enable_bus_n_romcs => enable_bus_n_romcs
-	)
 	port map ( 
 		CLK2X => CLK,
 		CLKX => clk_div2,
@@ -276,16 +271,7 @@ begin
 
 		-- video bus control signals
 		VBUS_MODE_O => vbus_mode, -- video bus mode: 0 - ram, 1 - vram
-		VID_RD_O => vid_rd, -- read attribute or pixel
-		
-		-- TRDOS 
-		TRDOS => not trdos,
-		
-		-- rom
-		ROM_BANK => port_7ffd(4),
-		ROM_A14 => ROM_A(14),
-		ROM_A15 => open,
-		N_ROMCS => open		
+		VID_RD_O => vid_rd -- read attribute or pixel	
 	);
 		
 	-- Z-Controller
@@ -362,14 +348,13 @@ begin
 		nIORQ				=> N_IORQ,
 		nMREQ				=> N_MREQ,
 		nDOS				=> trdos,
+		ROM14				=> rom14,
 		nROM_EN			=> worom,
-		blok				=> open,
-		rom_a(18 downto 15)	=> ROM_A(18 downto 15),
+		rom_a(18 downto 14)	=> ROM_A(18 downto 14),
 		rom_we			=> N_ROMWR,
 		rom_oe			=> N_ROMCS,
-		IORQGE_ROM		=> IORQGE_ROM,
-		OE_BUF			=> open
-		);
+		IORQGE_ROM		=> IORQGE_ROM
+	);
 	
 	-- clocks
 	process (CLK)
@@ -399,13 +384,6 @@ begin
 			clk_div16 <= not(clk_div16);
 		end if;
 	end process;
-
-	-- ROM
---	ROM_A16 <= '0';
---	ROM_A17 <= '0';
---	ROM_A18 <= '0';
-
---	N_ROMWR <= '1';
 
 	--RAM
 	MA <= mem_adr(18 downto 0);
@@ -514,7 +492,7 @@ begin
 	pal_attr <= D when cs_fe = '1' and (N_WR'event and N_WR = '1');
 	cs_7e <= '1' when cs_fe = '1' and A(7) = '0' else '0';
 	
-process (N_WR)
+process (N_RESET, N_WR)
 begin
 	if N_RESET = '0' then
 		port_7ffd <= (others => '0');

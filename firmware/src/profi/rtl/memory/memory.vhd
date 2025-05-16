@@ -8,52 +8,41 @@ use IEEE.std_logic_arith.conv_integer;
 use IEEE.numeric_std.all;
 
 entity memory is
-generic (
-		enable_bus_n_romcs : boolean := true
-);
-port (
-	CLK2X 		: in std_logic;
-	CLKX	   	: in std_logic;
-	CLK_CPU 		: in std_logic;
-	BUS_N_ROMCS : in std_logic;
+	port (
+		CLK2X 		: in std_logic;
+		CLKX	   	: in std_logic;
+		CLK_CPU 		: in std_logic;
+		BUS_N_ROMCS : in std_logic;
 
-	A           : in std_logic_vector(15 downto 0); -- address bus
-	D 				: in std_logic_vector(7 downto 0);
-	N_MREQ		: in std_logic;
-	N_IORQ 		: in std_logic;
-	N_WR 			: in std_logic;
-	N_RD 			: in std_logic;
-	N_M1 			: in std_logic;
+		A           : in std_logic_vector(15 downto 0); -- address bus
+		D 				: in std_logic_vector(7 downto 0);
+		N_MREQ		: in std_logic;
+		N_IORQ 		: in std_logic;
+		N_WR 			: in std_logic;
+		N_RD 			: in std_logic;
+		N_M1 			: in std_logic;
 	
-	DO 			: out std_logic_vector(7 downto 0);
-	N_OE 			: out std_logic;
+		DO 			: out std_logic_vector(7 downto 0);
+		N_OE 			: out std_logic;
 	
-	MA 			: out std_logic_vector(19 downto 0);
-	MD 			: inout std_logic_vector(7 downto 0);
-	N_MRD 		: out std_logic;
-	N_MWR 		: out std_logic;
+		MA 			: out std_logic_vector(19 downto 0);
+		MD 			: inout std_logic_vector(7 downto 0);
+		N_MRD 		: out std_logic;
+		N_MWR 		: out std_logic;
 	
-	RAM_BANK		: in std_logic_vector(2 downto 0);
-	RAM_EXT 		: in std_logic_vector(2 downto 0);
+		RAM_BANK		: in std_logic_vector(2 downto 0);
+		RAM_EXT 		: in std_logic_vector(2 downto 0);
+		VA				: in std_logic_vector(13 downto 0);
+		VID_PAGE 	: in std_logic := '0';
+		DS80			: in std_logic := '0';
+		CPM 			: in std_logic := '0';
+		SCO			: in std_logic := '0';
+		SCR 			: in std_logic := '0';
+		WOROM 		: in std_logic := '0';
 	
-	TRDOS 		: in std_logic;
-	
-	VA				: in std_logic_vector(13 downto 0);
-	VID_PAGE 	: in std_logic := '0';
-	DS80			: in std_logic := '0';
-	CPM 			: in std_logic := '0';
-	SCO			: in std_logic := '0';
-	SCR 			: in std_logic := '0';
-	WOROM 		: in std_logic := '0';
-	
-	VBUS_MODE_O : out std_logic;
-	VID_RD_O : out std_logic;
-	
-	ROM_BANK : in std_logic := '0';
-	ROM_A14 	: out std_logic;
-	ROM_A15  : out std_logic;
-	N_ROMCS 	: out std_logic
-);
+		VBUS_MODE_O : out std_logic;
+		VID_RD_O : out std_logic
+	);
 end memory;
 
 architecture RTL of memory is
@@ -61,34 +50,23 @@ architecture RTL of memory is
 	signal buf_md		: std_logic_vector(7 downto 0) := "11111111";
 	signal is_buf_wr	: std_logic := '0';	
 	
-	signal is_rom : std_logic := '0';
-	signal is_ram : std_logic := '0';
-	
-	signal rom_page : std_logic_vector(1 downto 0) := "00";
-	signal ram_page : std_logic_vector(5 downto 0) := "000000";
+	signal is_rom 		: std_logic := '0';
+	signal is_ram 		: std_logic := '0';
+
+	signal ram_page 	: std_logic_vector(5 downto 0) := "000000";
 
 	signal vbus_req	: std_logic := '1';
 	signal vbus_mode	: std_logic := '1';	
 	signal vbus_rdy	: std_logic := '1';
 	signal vbus_ack 	: std_logic := '1';
-	signal vid_rd : std_logic;
+	signal vid_rd 		: std_logic;
 	
-	signal mux : std_logic_vector(1 downto 0);
+	signal mux 			: std_logic_vector(1 downto 0);
 
 begin
 
 	is_rom <= '1' when N_MREQ = '0' and A(15 downto 14)  = "00" and WOROM = '0' else '0';
 	is_ram <= '1' when N_MREQ = '0' and is_rom = '0' else '0';
-	
-	-- 00 - bank 0, CPM
-	-- 01 - bank 1, TRDOS
-	-- 10 - bank 2, Basic-128
-	-- 11 - bank 3, Basic-48
-	rom_page <= (not(TRDOS)) & ROM_BANK;
-		
-	ROM_A14 <= rom_page(0);
-	ROM_A15 <= rom_page(1);
-	N_ROMCS <= '0' when is_rom = '1' and N_RD = '0' and ((enable_bus_n_romcs and BUS_N_ROMCS = '0') or not(enable_bus_n_romcs)) else '1';
 
 	vbus_req <= '0' when (N_MREQ = '0' or N_IORQ = '0') and ( N_WR = '0' or N_RD = '0' ) else '1';
 	vbus_rdy <= '0' when (CLKX = '0' or CLK_CPU = '0')  else '1';
