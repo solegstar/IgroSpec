@@ -48,7 +48,7 @@ set_global_assignment -name EDA_OUTPUT_DATA_FORMAT VHDL -section_id eda_simulati
 
 set_global_assignment -name FMAX_REQUIREMENT "28 MHz"
 set_global_assignment -name FMAX_REQUIREMENT "28 MHz" -section_id CLK14
-set_global_assignment -name MAX7000_OPTIMIZATION_TECHNIQUE AREA
+set_global_assignment -name MAX7000_OPTIMIZATION_TECHNIQUE BALANCED
 set_global_assignment -name AUTO_LCELL_INSERTION ON
 set_global_assignment -name OPTIMIZE_HOLD_TIMING OFF
 set_global_assignment -name AUTO_GLOBAL_CLOCK_MAX ON
@@ -146,7 +146,6 @@ set_location_assignment PIN_98 -to D[0]
 set_location_assignment PIN_100 -to D[1]
 set_location_assignment PIN_99 -to MD[1]
 set_location_assignment PIN_101 -to N_INT
-set_location_assignment PIN_102 -to N_IORQ
 set_location_assignment PIN_109 -to N_MREQ
 set_location_assignment PIN_110 -to VD[3]
 set_location_assignment PIN_111 -to MD[2]
@@ -258,3 +257,4 @@ set_location_assignment PIN_7 -to ROM_A[15]
 set_location_assignment PIN_3 -to ROM_A[16]
 set_location_assignment PIN_10 -to ROM_A[17]
 set_location_assignment PIN_177 -to ROM_A[18]
+set_location_assignment PIN_102 -to N_IORQ_Z80

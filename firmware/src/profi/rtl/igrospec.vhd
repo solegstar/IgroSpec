@@ -24,7 +24,7 @@ entity igrospec is
 		N_INT				: out std_logic := '1';
 		N_RD				: in std_logic;
 		N_WR				: in std_logic;
-		N_IORQ			: in std_logic;
+		N_IORQ_Z80		: in std_logic;
 		N_MREQ			: in std_logic;
 		N_M1				: in std_logic;
 		A					: in std_logic_vector(15 downto 0);
@@ -120,6 +120,8 @@ architecture rtl of igrospec is
 
 
 	signal CLK 			: std_logic := '0';
+	
+	signal N_IORQ		: std_logic := '1';		
 	
 	signal clk_div2 	: std_logic := '0';
 	signal clk_div4 	: std_logic := '0';
@@ -347,7 +349,7 @@ begin
 		nRESET			=> N_RESET,
 		nWR				=> N_WR,
 		nRD				=> N_RD,
-		nIORQ				=> N_IORQ,
+		nIORQ				=> N_IORQ_Z80,
 		nMREQ				=> N_MREQ,
 		nDOS				=> trdos,
 		ROM14				=> rom14,
@@ -387,6 +389,14 @@ begin
 		end if;
 	end process;
 	
+	-- Sync Z80 with CLK
+	process (CLK)
+	begin
+		if CLK'event and CLK = '1' then
+			N_IORQ <= N_IORQ_Z80 or BUS_N_IORQGE;
+		end if;
+	end process;
+
 	-- ROM
 	N_ROMCS <= rom_oe_n;
 
@@ -470,15 +480,20 @@ begin
 	begin
 		if N_RESET = '0' then
 			port_dffd <= (others => '0');
+			port_7ffd <= (others => '0');
 			trdos <= '0'; -- 1 - boot into service rom, 0 - boot into 128 menu
-
 		elsif CLK'event and CLK = '1' then 
 
 				-- port #DFFD (profi ram ext)
 				if cs_dffd = '1' and N_WR = '0' then
 					port_dffd <= D;
 				end if;
-	
+				
+				-- port #7FFD 
+				if cs_7ffd = '1' and N_WR = '0' and IORQGE_ROM = '0' and (port_7ffd(5) = '0' or port_dffd(4)='1') then -- short decoding #FD
+					port_7ffd <= D;
+				end if;
+
 				-- port #FE
 				if cs_fe = '1' and N_WR = '0' then
 					border_attr <= D; -- border attr
@@ -497,18 +512,6 @@ begin
 	-- порты #7e - пишутся по фронту /wr
 	pal_attr <= D when cs_fe = '1' and (N_WR'event and N_WR = '1');
 	cs_7e <= '1' when cs_fe = '1' and A(7) = '0' else '0';
-	
-process (N_RESET, N_WR)
-begin
-	if N_RESET = '0' then
-		port_7ffd <= (others => '0');
-	elsif  N_WR'event and N_WR = '1' then 
-		-- port #7FFD 
-		if cs_7ffd = '1' and IORQGE_ROM = '0' and (port_7ffd(5) = '0' or port_dffd(4)='1') then -- short decoding #FD
-			port_7ffd <= D;
-		end if;
-	end if;
-end process;
 	
 	-- read ports by CPU
 process (selector, ram_do, port_dffd, port_7ffd, zc_do_bus, GX0, TAPE_IN, KB, attr_r)
