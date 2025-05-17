@@ -448,7 +448,7 @@ begin
 	
 	-- Mapcond LED control
 --	MAPCOND <= '1';
-	MAPCOND <= '0';
+	MAPCOND <= not zc_sd_cs_n;
 
 	rom14 <= port_7ffd(4); -- rom bank
 	cpm <= port_dffd(5); -- 1 - блокирует работу контроллера из ПЗУ TR-DOS и включает порты на доступ из ОЗУ (ROM14=0); При ROM14=1 - мод. доступ к расширен. периферии

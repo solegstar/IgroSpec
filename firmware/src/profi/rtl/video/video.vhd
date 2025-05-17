@@ -288,11 +288,11 @@ begin
 	process( CLK2X, CLK, ENA, chr_col_cnt, hor_cnt, ver_cnt, shift_hr_r, attr, bitmap, paper, shift_r )
 	begin
 		if CLK2X'event and CLK2X = '1' then
+		if DS80 = '0' then
 			if CLK = '1' then		
 				if ENA = '1' then
 					if chr_col_cnt = 7 then
-						if (((hor_cnt(5 downto 0) > 38 and hor_cnt(5 downto 0) < 48) or ver_cnt(5 downto 1) = 15) and ds80 = '0') or											--256x192
-						(((hor_cnt(6 downto 0) > 67 and hor_cnt(6 downto 0) < 91) or (ver_cnt(5 downto 0) > 32 and ver_cnt(5 downto 0) < 36)) and ds80 = '1')	then	--512x240
+						if ((hor_cnt(5 downto 0) > 38 and hor_cnt(5 downto 0) < 48) or ver_cnt(5 downto 1) = 15) then	--256x192
 							blank_r <= '0';
 						else 
 							blank_r <= '1';
@@ -301,6 +301,18 @@ begin
 					end if;
 				end if;
 			end if;
+		else
+			if CLK = '1' then		
+					if chr_col_cnt = 7 then
+						if ((hor_cnt(6 downto 0) > 67 and hor_cnt(6 downto 0) < 91) or (ver_cnt(5 downto 0) > 32 and ver_cnt(5 downto 0) < 36))	then	--512x240
+							blank_r <= '0';
+						else 
+							blank_r <= '1';
+						end if;							
+						paper_r <= paper;
+					end if;
+			end if;
+		end if;
 		end if;
 	end process;	
 	
