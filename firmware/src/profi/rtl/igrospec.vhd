@@ -10,9 +10,6 @@ use IEEE.std_logic_1164.all;
 use IEEE.numeric_std.all;
 
 entity igrospec is
-	generic (
-		enable_turbo 	: boolean := false -- enable Turbo mode 7MHz
-	);
 	port(
 		-- Clock
 		CLK28				: in std_logic;
@@ -95,7 +92,7 @@ entity igrospec is
 		-- TODO: extra signals KB 7 downto 5
 		
 		-- Other in signals
-		TURBO				: in std_logic := '0';
+		TURBO_BTN		: in std_logic := '0';
 		SPECIAL			: in std_logic := '0';
 		IO8 				: in std_logic := '0';		
 		IO11 				: in std_logic := '0';		
@@ -111,7 +108,7 @@ entity igrospec is
 		IOCLR				: in std_logic := '0';
 		IOE				: in std_logic;
 		MAPCOND 			: out std_logic;
-		BTN_NMI			: in std_logic := '1'
+		NMI_BTN			: in std_logic := '1'
 
 	);
 end igrospec;
@@ -180,6 +177,8 @@ architecture rtl of igrospec is
 	
 	signal fd_port 	: std_logic := '1';
 	signal fd_sel 		: std_logic;
+	
+	signal turbo_mode	: std_logic;
 	
 	-- Port selectors
 	signal selector	: std_logic_vector(3 downto 0);
@@ -298,9 +297,6 @@ begin
 	
 -- video controller
 	U3: entity work.video 
-	generic map (
-		enable_turbo => enable_turbo
-	)
 	port map (
 		CLK => clk_div2, -- 14
 		CLK2x => CLK, -- 28
@@ -311,7 +307,7 @@ begin
 		BORDER => border_attr,
 		PAL_ADR => pal_attr,
 		DI => MD,
-		TURBO => turbo,
+		TURBO => turbo_mode,
 		INTA => N_IORQ or N_M1,
 		INT => N_INT,
 		ATTR_O => attr_r, 
@@ -394,6 +390,7 @@ begin
 	begin
 		if CLK'event and CLK = '1' then
 			N_IORQ <= N_IORQ_Z80 or BUS_N_IORQGE;
+			turbo_mode <= not TURBO_BTN;
 		end if;
 	end process;
 
@@ -422,7 +419,20 @@ begin
 			end if;
 	 end process;
 
-	clkcpu <= clk_div8;
+	-- CPU clk selector
+
+	process (CLK, clk_div2, clk_div4, clk_div8, clkcpu)
+	begin
+		if CLK'event and CLK = '1' then
+			if clk_div2 = '1' and turbo_mode = '0' then
+				clkcpu <= clk_div4;
+			elsif clk_div2 = '0' and clk_div4 = '1' and turbo_mode = '1' then
+				clkcpu <= clk_div8;
+			end if;
+		end if;
+	end process;
+
+--clkcpu <= clk_div8;
 
 	--ZX-BUS Signals
 	BUS_F <= clk_div2;
@@ -454,7 +464,7 @@ begin
 	BEEPER <= border_attr(4);
 	
 	-- NMI button
-	N_NMI <= BTN_NMI;
+	N_NMI <= NMI_BTN;
 	
 	-- Mapcond LED control
 --	MAPCOND <= '1';

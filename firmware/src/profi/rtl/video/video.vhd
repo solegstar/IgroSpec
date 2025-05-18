@@ -8,9 +8,6 @@ use IEEE.numeric_std.ALL;
 use IEEE.std_logic_unsigned.all;
 
 entity video is
-	generic (
-			enable_turbo 		 : boolean := true
-	);
 	port (
 		CLK2X 	: in std_logic; -- 28 MHz
 		CLK		: in std_logic; -- 14 MHz
@@ -142,12 +139,14 @@ begin
 				end if;
 			
 				-- int
-				if enable_turbo and TURBO = '1' then
+				if TURBO = '0' then
 					-- TURBO int
-					if hor_cnt & chr_col_cnt = 318 and ver_cnt & chr_row_cnt = 239 then
-						int_sig <= '0';
-					elsif INTA = '0' then
-						int_sig <= '1';
+					if chr_col_cnt = 6 and hor_cnt(1 downto 0) = "11" then
+						if ver_cnt = 29 and chr_row_cnt = 7 and hor_cnt(5 downto 2) = "1001" then
+							int_sig <= '0';
+						else
+							int_sig <= '1';
+						end if;
 					end if;
 				else 
 					-- PENTAGON int
@@ -208,12 +207,14 @@ begin
 				end if;
 			
 				-- int
-				if enable_turbo and TURBO = '1' then
+				if TURBO = '0' then
 					-- TURBO int
-					if hor_cnt & chr_col_cnt = 656 and ver_cnt & chr_row_cnt = 257 then
-						int_sig <= '0';
-					elsif INTA = '0' then
-						int_sig <= '1';
+					if chr_col_cnt = 6 and hor_cnt(1 downto 0) = "10" then
+						if ver_cnt = 32 and chr_row_cnt = 7 and hor_cnt(6 downto 2) = "10010" then
+							int_sig <= '0';
+						else
+							int_sig <= '1';
+						end if;
 					end if;
 				else 
 					-- Profi 5 int

@@ -112,7 +112,6 @@ set_location_assignment PIN_44 -to CLK_CPU
 set_location_assignment PIN_47 -to A[6]
 set_location_assignment PIN_46 -to A[7]
 set_location_assignment PIN_49 -to A[12]
-set_location_assignment PIN_48 -to BTN_NMI
 set_location_assignment PIN_59 -to D[4]
 set_location_assignment PIN_60 -to A[1]
 set_location_assignment PIN_61 -to D[5]
@@ -120,7 +119,6 @@ set_location_assignment PIN_62 -to N_NMI
 set_location_assignment PIN_65 -to A[11]
 set_location_assignment PIN_66 -to SPECIAL
 set_location_assignment PIN_67 -to A[13]
-set_location_assignment PIN_68 -to TURBO
 set_location_assignment PIN_69 -to A[14]
 set_location_assignment PIN_70 -to KB[4]
 set_location_assignment PIN_71 -to A[15]
@@ -258,3 +256,5 @@ set_location_assignment PIN_3 -to ROM_A[16]
 set_location_assignment PIN_10 -to ROM_A[17]
 set_location_assignment PIN_177 -to ROM_A[18]
 set_location_assignment PIN_102 -to N_IORQ_Z80
+set_location_assignment PIN_48 -to NMI_BTN
+set_location_assignment PIN_68 -to TURBO_BTN
