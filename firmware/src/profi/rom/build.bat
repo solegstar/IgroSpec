@@ -1,0 +1,1 @@
+copy /b /y 1_RRS_MAIN.ROM + 2_ROMain.ROM + 3_PQ-DOS_BIOS.ROM + 4_FDImage.ROM + 5_Profi_Service.ROM + 6_DNA-OS_ROMset.ROM + 7_Temp_ROMset.ROM + 8_RRS_ROMDISK.ROM  ..\..\..\releases\profi\roms\RRS_Prf1024.rom
