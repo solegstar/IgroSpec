@@ -223,13 +223,13 @@ architecture rtl of igrospec is
 begin
 
 	 -- main clock selector
-	 U0: entity work.clk_mux
-	 port map(
-		data0 => CLK28,
-		data1 => CLK24,
-		sel => ds80,
-		result => CLK
-	 );
+--	 U0: entity work.clk_mux
+--	 port map(
+--		data0 => CLK28,
+--		data1 => CLK24,
+--		sel => ds80,
+--		result => CLK
+--	 );
 
 	-- memory manager
 	U1: entity work.memory 
@@ -355,6 +355,8 @@ begin
 		rom_oe			=> rom_oe_n,
 		IORQGE_ROM		=> IORQGE_ROM
 	);
+	
+	CLK <= CLK28;
 	
 	-- clocks
 	process (CLK)
