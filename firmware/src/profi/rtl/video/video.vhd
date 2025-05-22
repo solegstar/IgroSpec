@@ -196,7 +196,7 @@ begin
 						HSYNC <= '1';
 					end if;
 					
-					if ver_cnt /= 31 then
+					if ver_cnt /= 33 then
 						VSYNC <= '1';
 					elsif chr_row_cnt = 3 or chr_row_cnt = 4 or ( chr_row_cnt = 5 and ( hor_cnt >= 40 or hor_cnt < 12 ) ) then
 						VSYNC<= '0';
@@ -305,7 +305,7 @@ begin
 		else
 			if CLK = '1' then		
 					if chr_col_cnt = 7 then
-						if ((hor_cnt(6 downto 0) > 67 and hor_cnt(6 downto 0) < 91) or (ver_cnt(5 downto 0) > 32 and ver_cnt(5 downto 0) < 36))	then	--512x240
+						if ((hor_cnt(6 downto 0) > 67 and hor_cnt(6 downto 0) < 92) or (ver_cnt(5 downto 0) > 31 and ver_cnt(5 downto 0) < 37))	then	--512x240
 							blank_r <= '0';
 						else 
 							blank_r <= '1';
